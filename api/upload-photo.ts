@@ -7,7 +7,7 @@
 
 export const config = { runtime: 'edge' };
 
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '').split(',').map((s: string) => s.trim()).filter(Boolean);
 const MAX_FILE_BYTES = 4 * 1024 * 1024; // 4 MB to stay under Vercel's body limit
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
