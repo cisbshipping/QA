@@ -1,0 +1,309 @@
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { getInspection, updateInspection } from '@/lib/db';
+import { type Inspection } from '@/types';
+import { useAuth } from '@/hooks/useAuth';
+import { Card, CardBody, CardHeader } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { StatusBadge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
+import { InspectionForm } from '@/components/forms/InspectionForm';
+import { Input, Textarea } from '@/components/ui/Input';
+import { fmtDate, fmtDateTime } from '@/lib/utils';
+import { ArrowLeft, Pencil, CheckCircle, XCircle, CheckSquare, XSquare } from 'lucide-react';
+
+function DetailRow({ label, value }: { label: string; value?: string | null | boolean | number }) {
+  if (value === undefined || value === null || value === '') return null;
+  return (
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label}</dt>
+      <dd className="text-sm text-gray-900">{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</dd>
+    </div>
+  );
+}
+
+function CheckItem({ checked, label }: { checked: boolean; label: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      {checked
+        ? <CheckSquare className="w-4 h-4 text-green-600 shrink-0" />
+        : <XSquare className="w-4 h-4 text-gray-300 shrink-0" />}
+      <span className="text-sm text-gray-700">{label}</span>
+    </div>
+  );
+}
+
+export function InspectionDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { user, appUser } = useAuth();
+  const [inspection, setInspection] = useState<Inspection | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showEdit, setShowEdit] = useState(false);
+  const [showReview, setShowReview] = useState<'accept' | 'reject' | null>(null);
+  const [showResult, setShowResult] = useState<'pass' | 'fail' | null>(null);
+  const [reviewNote, setReviewNote] = useState('');
+  const [inspectionDate, setInspectionDate] = useState('');
+  const [resultNote, setResultNote] = useState('');
+  const [reschedDate, setReschedDate] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const load = async () => {
+    if (!id) return;
+    setLoading(true);
+    const data = await getInspection(id);
+    setInspection(data);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [id]);
+
+  const handleReview = async (action: 'accept' | 'reject') => {
+    if (!inspection || !user || !appUser) return;
+    setActionLoading(true);
+    await updateInspection(
+      inspection.id,
+      {
+        status: action === 'accept' ? 'accepted' : 'rejected',
+        inspectionDate: action === 'accept' && inspectionDate ? new Date(inspectionDate) : undefined,
+        reviewNotes: reviewNote,
+        reviewedBy: appUser.name,
+        reviewedAt: new Date(),
+      },
+      user.uid, appUser.name, action,
+    );
+    setShowReview(null);
+    setReviewNote('');
+    setInspectionDate('');
+    load();
+    setActionLoading(false);
+  };
+
+  const handleResult = async (result: 'pass' | 'fail') => {
+    if (!inspection || !user || !appUser) return;
+    setActionLoading(true);
+    await updateInspection(
+      inspection.id,
+      {
+        status: result === 'pass' ? 'passed' : 'failed',
+        inspectionResult: result,
+        resultNotes: resultNote,
+        rescheduledDate: result === 'fail' && reschedDate ? new Date(reschedDate) : undefined,
+        closedAt: result === 'pass' ? new Date() : undefined,
+      },
+      user.uid, appUser.name, result === 'pass' ? 'passed' : 'failed',
+    );
+    setShowResult(null);
+    setResultNote('');
+    setReschedDate('');
+    load();
+    setActionLoading(false);
+  };
+
+  const canReview = appUser?.role === 'admin' || appUser?.role === 'qa';
+  const canEdit = appUser?.role === 'admin' || appUser?.role === 'qa' || appUser?.role === 'manager';
+
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-7 h-7 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>;
+  if (!inspection) return <div className="p-6 text-gray-500">Inspection not found. <Link to="/inspections" className="text-blue-600 hover:underline">Go back</Link></div>;
+
+  return (
+    <div className="p-6 max-w-5xl mx-auto">
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100">
+          <ArrowLeft className="w-5 h-5 text-gray-600" />
+        </button>
+        <div className="flex-1">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold text-gray-900 font-mono">{inspection.customerPiNo}</h1>
+            <StatusBadge status={inspection.status} />
+          </div>
+          <p className="text-sm text-gray-500 mt-0.5">Requested by {inspection.picName} on {fmtDate(inspection.dateRequested)}</p>
+        </div>
+        <div className="flex gap-2">
+          {canEdit && inspection.status === 'pending' && (
+            <Button variant="outline" size="sm" onClick={() => setShowEdit(true)}>
+              <Pencil className="w-4 h-4" /> Edit
+            </Button>
+          )}
+          {canReview && inspection.status === 'pending' && (
+            <>
+              <Button variant="danger" size="sm" onClick={() => setShowReview('reject')}>
+                <XCircle className="w-4 h-4" /> Reject
+              </Button>
+              <Button size="sm" onClick={() => setShowReview('accept')}>
+                <CheckCircle className="w-4 h-4" /> Accept
+              </Button>
+            </>
+          )}
+          {canReview && inspection.status === 'accepted' && (
+            <>
+              <Button variant="danger" size="sm" onClick={() => setShowResult('fail')}>
+                <XCircle className="w-4 h-4" /> Fail
+              </Button>
+              <Button size="sm" onClick={() => setShowResult('pass')}>
+                <CheckCircle className="w-4 h-4" /> Pass
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          {/* Order info */}
+          <Card>
+            <CardHeader><h2 className="font-semibold text-gray-800">Order Information</h2></CardHeader>
+            <CardBody>
+              <dl className="grid grid-cols-2 gap-4">
+                <DetailRow label="Company" value={inspection.company} />
+                <DetailRow label="Customer" value={inspection.customer} />
+                <DetailRow label="Customer Country" value={inspection.customerCountry} />
+                <DetailRow label="Customer PI No." value={inspection.customerPiNo} />
+                <DetailRow label="Supplier PO No." value={inspection.supplierPoNo} />
+                <DetailRow label="Factory / Location" value={inspection.factory} />
+                <DetailRow label="Factory Commit Date" value={fmtDate(inspection.factoryCommitDate)} />
+                <DetailRow label="Total Qty (Cartons)" value={inspection.totalQtyCartons.toLocaleString()} />
+                <DetailRow label="Container Size" value={inspection.containerSize} />
+              </dl>
+            </CardBody>
+          </Card>
+
+          {/* Product */}
+          <Card>
+            <CardHeader><h2 className="font-semibold text-gray-800">Product Description</h2></CardHeader>
+            <CardBody>
+              <dl className="grid grid-cols-2 gap-4">
+                <DetailRow label="Product" value={inspection.product} />
+                <DetailRow label="Standard" value={inspection.productStandard} />
+                <DetailRow label="Grade" value={inspection.productGrade} />
+              </dl>
+            </CardBody>
+          </Card>
+
+          {/* Inspection details */}
+          <Card>
+            <CardHeader><h2 className="font-semibold text-gray-800">Inspection Details</h2></CardHeader>
+            <CardBody className="flex flex-col gap-4">
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Criteria Acknowledgement</p>
+                <div className="flex flex-col gap-1.5">
+                  <CheckItem checked={inspection.criteriaNotIndustrial} label="Not industrial & stock gloves" />
+                  <CheckItem checked={inspection.criteriaUnderstandOutsideKV} label="Understands outside KV = third party" />
+                  <CheckItem checked={inspection.criteriaCostBelow020} label="Inspection cost below USD 0.20/carton" />
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Reason for Request</p>
+                <p className="text-sm text-gray-900">{inspection.reasonForRequest}</p>
+              </div>
+              <dl className="grid grid-cols-2 gap-4">
+                <div>
+                  <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Focus Areas</dt>
+                  <dd className="flex flex-wrap gap-1">
+                    {inspection.focusAreas.map(a => (
+                      <span key={a} className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full">{a}</span>
+                    ))}
+                    {inspection.focusOthers && <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full">{inspection.focusOthers}</span>}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Inspector Type</dt>
+                  <dd className="flex flex-wrap gap-1">
+                    {inspection.inspectorTypes.map(t => (
+                      <span key={t} className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs rounded-full capitalize">{t}</span>
+                    ))}
+                  </dd>
+                </div>
+                <DetailRow label="AQL Level" value={inspection.aqlLevel + (inspection.aqlOther ? ` (${inspection.aqlOther})` : '')} />
+                <DetailRow label="PSI Report Required" value={inspection.needsPsiReport} />
+              </dl>
+              {inspection.remarks && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Remarks</p>
+                  <p className="text-sm text-gray-900">{inspection.remarks}</p>
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        </div>
+
+        {/* Side panel */}
+        <div className="flex flex-col gap-4">
+          <Card>
+            <CardHeader><h2 className="font-semibold text-gray-800">Approval</h2></CardHeader>
+            <CardBody>
+              <dl className="flex flex-col gap-3">
+                <DetailRow label="Requested By" value={inspection.requestedByName} />
+                <DetailRow label="Request Date" value={fmtDate(inspection.requestedByDate)} />
+                <DetailRow label="Reviewed By (HOD)" value={inspection.hodName} />
+                <DetailRow label="HOD Date" value={fmtDate(inspection.hodDate)} />
+              </dl>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader><h2 className="font-semibold text-gray-800">Workflow</h2></CardHeader>
+            <CardBody>
+              <dl className="flex flex-col gap-3">
+                <DetailRow label="Status" value={inspection.status.charAt(0).toUpperCase() + inspection.status.slice(1)} />
+                <DetailRow label="Scheduled Inspection Date" value={fmtDate(inspection.inspectionDate)} />
+                <DetailRow label="Inspection Result" value={inspection.inspectionResult?.toUpperCase()} />
+                {inspection.resultNotes && <DetailRow label="Result Notes" value={inspection.resultNotes} />}
+                <DetailRow label="Rescheduled Date" value={fmtDate(inspection.rescheduledDate)} />
+                <DetailRow label="Reviewed By" value={inspection.reviewedBy} />
+                <DetailRow label="Reviewed At" value={fmtDateTime(inspection.reviewedAt)} />
+                {inspection.reviewNotes && <DetailRow label="Review Notes" value={inspection.reviewNotes} />}
+                <DetailRow label="Closed At" value={fmtDateTime(inspection.closedAt)} />
+              </dl>
+            </CardBody>
+          </Card>
+        </div>
+      </div>
+
+      {/* Edit Modal */}
+      <Modal open={showEdit} onClose={() => setShowEdit(false)} title="Edit Inspection Request" size="2xl">
+        <InspectionForm existing={inspection} onSuccess={() => { setShowEdit(false); load(); }} onCancel={() => setShowEdit(false)} />
+      </Modal>
+
+      {/* Review Modal */}
+      <Modal open={!!showReview} onClose={() => setShowReview(null)} title={showReview === 'accept' ? 'Accept Inspection Request' : 'Reject Inspection Request'} size="md">
+        <div className="p-6 flex flex-col gap-4">
+          {showReview === 'accept' && (
+            <Input label="Scheduled Inspection Date" type="date" value={inspectionDate} onChange={e => setInspectionDate(e.target.value)} />
+          )}
+          <Textarea label="Notes (optional)" value={reviewNote} onChange={e => setReviewNote(e.target.value)} rows={4} />
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setShowReview(null)}>Cancel</Button>
+            <Button
+              variant={showReview === 'reject' ? 'danger' : 'primary'}
+              loading={actionLoading}
+              onClick={() => handleReview(showReview!)}
+            >
+              {showReview === 'accept' ? 'Confirm Accept' : 'Confirm Reject'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Result Modal */}
+      <Modal open={!!showResult} onClose={() => setShowResult(null)} title={showResult === 'pass' ? 'Record Pass Result' : 'Record Fail Result'} size="md">
+        <div className="p-6 flex flex-col gap-4">
+          {showResult === 'fail' && (
+            <Input label="Rescheduled Inspection Date" type="date" value={reschedDate} onChange={e => setReschedDate(e.target.value)} />
+          )}
+          <Textarea label="Result Notes" value={resultNote} onChange={e => setResultNote(e.target.value)} rows={4} />
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setShowResult(null)}>Cancel</Button>
+            <Button
+              variant={showResult === 'fail' ? 'danger' : 'primary'}
+              loading={actionLoading}
+              onClick={() => handleResult(showResult!)}
+            >
+              {showResult === 'pass' ? 'Record Pass' : 'Record Fail & Reschedule'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
