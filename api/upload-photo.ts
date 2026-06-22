@@ -5,7 +5,7 @@
 //   SHAREPOINT_SITE_PATH      e.g. sites/qa-team           (path part of the SharePoint URL)
 //   SHAREPOINT_FOLDER_PATH    e.g. Complaint Photos        (folder inside the default Documents library)
 
-export const config = { runtime: 'nodejs' };
+export const config = { runtime: 'edge' };
 
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '').split(',').map(s => s.trim()).filter(Boolean);
 const MAX_FILE_BYTES = 4 * 1024 * 1024; // 4 MB to stay under Vercel's body limit
@@ -38,6 +38,11 @@ async function getGraphToken(): Promise<string> {
 
 function sanitize(name: string): string {
   return name.replace(/[^\w.\- ]/g, '_').slice(0, 120);
+}
+
+// Encode each path segment so spaces/special chars are escaped but '/' separators survive.
+function encodePath(p: string): string {
+  return p.split('/').filter(Boolean).map(encodeURIComponent).join('/');
 }
 
 function corsHeaders(origin: string | null): Record<string, string> {
@@ -83,9 +88,9 @@ export default async function handler(req: Request): Promise<Response> {
     // PUT /sites/{host}:/{site-path}:/drive/root:/{folder}/{ref-no}/{filename}:/content
     const safeRef = sanitize(refNo);
     const safeName = sanitize(file.name);
-    const folder = SHAREPOINT_FOLDER_PATH.replace(/^\/+|\/+$/g, '');
-    const sitePath = SHAREPOINT_SITE_PATH.replace(/^\/+|\/+$/g, '');
-    const uploadUrl = `https://graph.microsoft.com/v1.0/sites/${SHAREPOINT_HOSTNAME}:/${sitePath}:/drive/root:/${encodeURIComponent(folder)}/${encodeURIComponent(safeRef)}/${encodeURIComponent(safeName)}:/content`;
+    const folder = encodePath(SHAREPOINT_FOLDER_PATH);
+    const sitePath = encodePath(SHAREPOINT_SITE_PATH);
+    const uploadUrl = `https://graph.microsoft.com/v1.0/sites/${SHAREPOINT_HOSTNAME}:/${sitePath}:/drive/root:/${folder}/${encodeURIComponent(safeRef)}/${encodeURIComponent(safeName)}:/content`;
 
     const bytes = await file.arrayBuffer();
     const uploadRes = await fetch(uploadUrl, {
