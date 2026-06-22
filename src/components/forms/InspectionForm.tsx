@@ -63,6 +63,7 @@ const INSPECTOR_OPTIONS = [
 export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
   const { user, appUser } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, control, watch, formState: { errors } } = useForm<FormData>({
@@ -115,10 +116,14 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
   const focusAreas = watch('focusAreas') as string[];
 
   const onSubmit = async (data: FormData) => {
-    if (!user || !appUser) return;
+    if (!user || !appUser) {
+      setSubmitError('You are not signed in. Please refresh and try again.');
+      return;
+    }
     setLoading(true);
+    setSubmitError('');
     try {
-      const payload = {
+      const raw = {
         picName: appUser.name,
         picUid: user.uid,
         department: data.department,
@@ -152,12 +157,24 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
         status: (existing?.status ?? 'pending') as Inspection['status'],
       };
 
+      const payload = Object.fromEntries(
+        Object.entries(raw).filter(([, v]) => v !== undefined && v !== '')
+      ) as typeof raw;
+
       if (existing) {
         await updateInspection(existing.id, payload, user.uid, appUser.name, 'edited');
       } else {
-        await createInspection(payload);
+        await createInspection(payload as Omit<Inspection, 'id' | 'createdAt' | 'updatedAt'>);
       }
       onSuccess();
+    } catch (err) {
+      const e = err as { code?: string; message?: string };
+      if (e.code === 'permission-denied' || e.message?.includes('insufficient permissions')) {
+        setSubmitError(`Permission denied. Your role (${appUser.role}) cannot create inspection requests, or Firestore rules are outdated.`);
+      } else {
+        setSubmitError(e.message ?? 'Failed to save inspection request. Please try again.');
+      }
+      console.error('Inspection submit error:', err);
     } finally {
       setLoading(false);
     }
@@ -333,6 +350,22 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
             <Input label="Reviewed By (HOD) *" error={errors.hodName?.message} {...register('hodName')} />
           </div>
         </fieldset>
+        {Object.keys(errors).length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+            <p className="font-semibold mb-1">Please fix the following before submitting:</p>
+            <ul className="list-disc list-inside text-xs flex flex-col gap-0.5">
+              {Object.entries(errors).map(([key, err]) => (
+                <li key={key}><span className="font-medium">{key}</span>: {(err as { message?: string }).message ?? 'Required'}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {submitError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+            {submitError}
+          </div>
+        )}
       </CardBody>
 
       <CardFooter className="flex justify-end gap-3">

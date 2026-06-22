@@ -43,6 +43,7 @@ interface Props {
 export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
   const { user, appUser } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [complaintNo, setComplaintNo] = useState(existing?.complaintNo ?? '');
 
   const { register, handleSubmit, control, watch, formState: { errors } } = useForm<FormData>({
@@ -83,10 +84,15 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
   const selectedNatures = watch('natures') as string[];
 
   const onSubmit = async (data: FormData) => {
-    if (!user || !appUser) return;
+    if (!user || !appUser) {
+      setSubmitError('You are not signed in. Please refresh and try again.');
+      return;
+    }
     setLoading(true);
+    setSubmitError('');
     try {
-      const payload = {
+      // Strip undefined fields — Firestore rejects them.
+      const raw = {
         complaintNo,
         recordedBy: appUser.name,
         recordedByUid: user.uid,
@@ -113,13 +119,24 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
         forwardedBy: data.forwardedBy,
         status: (existing?.status ?? 'open') as Complaint['status'],
       };
+      const payload = Object.fromEntries(
+        Object.entries(raw).filter(([, v]) => v !== undefined && v !== '')
+      ) as typeof raw;
 
       if (existing) {
         await updateComplaint(existing.id, payload, user.uid, appUser.name, 'edited');
       } else {
-        await createComplaint(payload);
+        await createComplaint(payload as Omit<Complaint, 'id' | 'createdAt' | 'updatedAt'>);
       }
       onSuccess();
+    } catch (err) {
+      const e = err as { code?: string; message?: string };
+      if (e.code === 'permission-denied' || e.message?.includes('insufficient permissions')) {
+        setSubmitError(`Permission denied. Your role (${appUser.role}) cannot create complaints, or Firestore rules are outdated.`);
+      } else {
+        setSubmitError(e.message ?? 'Failed to save complaint. Please try again.');
+      }
+      console.error('Complaint submit error:', err);
     } finally {
       setLoading(false);
     }
@@ -240,6 +257,23 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
           <Input label="Date Issued to Factory" type="date" {...register('dateIssuedToFactory')} />
           <Input label="Forwarded By" {...register('forwardedBy')} />
         </div>
+
+        {Object.keys(errors).length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+            <p className="font-semibold mb-1">Please fix the following before submitting:</p>
+            <ul className="list-disc list-inside text-xs flex flex-col gap-0.5">
+              {Object.entries(errors).map(([key, err]) => (
+                <li key={key}><span className="font-medium">{key}</span>: {(err as { message?: string }).message ?? 'Required'}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {submitError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+            {submitError}
+          </div>
+        )}
       </CardBody>
 
       <CardFooter className="flex justify-end gap-3">
