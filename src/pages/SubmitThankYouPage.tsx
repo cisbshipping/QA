@@ -18,7 +18,10 @@ export function SubmitThankYouPage() {
           Our QA team will review your submission and contact you by email within 2 business days.
           Please save the reference number for your records.
         </p>
-        <Link to="/" className="text-sm text-blue-600 hover:underline mt-2">Return to sign in</Link>
+        <div className="flex flex-col items-center gap-2 mt-2">
+          <Link to={`/track?ref=${ref}`} className="text-sm text-blue-600 hover:underline">Track this submission later</Link>
+          <Link to="/" className="text-sm text-blue-600 hover:underline">Return to sign in</Link>
+        </div>
       </div>
     </PublicSubmitLayout>
   );

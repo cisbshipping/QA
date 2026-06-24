@@ -97,6 +97,10 @@ export function LoginCard() {
             </Link>
           </div>
 
+          <Link to="/track" className="text-xs text-blue-600 hover:underline text-center">
+            Track an existing submission →
+          </Link>
+
           {/* "How to use" guide */}
           <div className="border border-gray-200 rounded-lg overflow-hidden">
             <button

@@ -157,7 +157,10 @@ export function PublicComplaintPage() {
       title="Submit a Complaint"
       subtitle="Tell us about a quality issue with one of our products. All fields marked * are required."
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
+      <form onSubmit={handleSubmit(onSubmit, () => {
+        // On validation error, scroll bottom of form into view so the error summary is visible.
+        setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 50);
+      })} className="flex flex-col gap-5">
         {/* Submitter */}
         <fieldset className="border border-gray-200 rounded-lg p-4">
           <legend className="px-2 text-sm font-semibold text-gray-700">Your Details</legend>
@@ -330,6 +333,17 @@ export function PublicComplaintPage() {
 
         {/* Description */}
         <Textarea label="Description of Complaint *" rows={5} error={errors.description?.message} {...register('description')} />
+
+        {Object.keys(errors).length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+            <p className="font-semibold mb-1">Please fix the following before submitting:</p>
+            <ul className="list-disc list-inside text-xs flex flex-col gap-0.5">
+              {Object.entries(errors).map(([key, err]) => (
+                <li key={key}><span className="font-medium">{key}</span>: {(err as { message?: string }).message ?? 'Required'}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         {progress && <p className="text-sm text-blue-600">{progress}</p>}

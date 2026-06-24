@@ -7,10 +7,14 @@
 
 export const config = { runtime: 'edge' };
 
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+// Vercel Edge runtime: process.env is available but Node types aren't loaded by Vercel's type checker.
+declare const process: { env: Record<string, string | undefined> };
+
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '').split(',').map((s: string) => s.trim()).filter(Boolean);
 const MAX_FILE_BYTES = 4 * 1024 * 1024; // 4 MB to stay under Vercel's body limit
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
+let cachedSiteId: string | null = null;
 
 async function getGraphToken(): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) return cachedToken.value;
@@ -45,6 +49,22 @@ function encodePath(p: string): string {
   return p.split('/').filter(Boolean).map(encodeURIComponent).join('/');
 }
 
+async function getSiteId(token: string): Promise<string> {
+  if (cachedSiteId) return cachedSiteId;
+  const { SHAREPOINT_HOSTNAME, SHAREPOINT_SITE_PATH } = process.env;
+  if (!SHAREPOINT_HOSTNAME || !SHAREPOINT_SITE_PATH) throw new Error('Missing SharePoint env vars.');
+  const sitePath = encodePath(SHAREPOINT_SITE_PATH);
+  const url = `https://graph.microsoft.com/v1.0/sites/${SHAREPOINT_HOSTNAME}:/${sitePath}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Site lookup failed (${res.status}). URL: ${url}. Detail: ${detail}`);
+  }
+  const data = (await res.json()) as { id: string };
+  cachedSiteId = data.id;
+  return data.id;
+}
+
 function corsHeaders(origin: string | null): Record<string, string> {
   const allow = origin && (ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) ? origin : '*';
   return {
@@ -77,20 +97,20 @@ export default async function handler(req: Request): Promise<Response> {
       return Response.json({ error: 'File exceeds 4 MB limit' }, { status: 400, headers: cors });
     }
 
-    const { SHAREPOINT_HOSTNAME, SHAREPOINT_SITE_PATH, SHAREPOINT_FOLDER_PATH } = process.env;
-    if (!SHAREPOINT_HOSTNAME || !SHAREPOINT_SITE_PATH || !SHAREPOINT_FOLDER_PATH) {
-      throw new Error('Missing SharePoint env vars.');
+    const { SHAREPOINT_FOLDER_PATH } = process.env;
+    if (!SHAREPOINT_FOLDER_PATH) {
+      throw new Error('Missing SHAREPOINT_FOLDER_PATH env var.');
     }
 
     const token = await getGraphToken();
+    const siteId = await getSiteId(token);
 
-    // Resolve site -> drive -> upload path
-    // PUT /sites/{host}:/{site-path}:/drive/root:/{folder}/{ref-no}/{filename}:/content
+    // Resolve site -> default drive -> upload path
+    // PUT /sites/{site-id}/drive/root:/{folder}/{ref-no}/{filename}:/content
     const safeRef = sanitize(refNo);
     const safeName = sanitize(file.name);
     const folder = encodePath(SHAREPOINT_FOLDER_PATH);
-    const sitePath = encodePath(SHAREPOINT_SITE_PATH);
-    const uploadUrl = `https://graph.microsoft.com/v1.0/sites/${SHAREPOINT_HOSTNAME}:/${sitePath}:/drive/root:/${folder}/${encodeURIComponent(safeRef)}/${encodeURIComponent(safeName)}:/content`;
+    const uploadUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${folder}/${encodeURIComponent(safeRef)}/${encodeURIComponent(safeName)}:/content`;
 
     const bytes = await file.arrayBuffer();
     const uploadRes = await fetch(uploadUrl, {

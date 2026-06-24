@@ -12,11 +12,10 @@ export type InspectorType = 'in-house' | 'pic' | 'third-party';
 export type AqlLevel = 'G1/AQL 1.5' | 'G1/AQL 2.5' | 'G1/AQL 4.0' | 'other';
 
 export const YL_COMPANIES = [
-  'Cranberry (M) Sdn. Bhd.',
-  'Multisafe Sdn. Bhd.',
   'ASAP International Sdn. Bhd.',
   'Cranberry International Sdn. Bhd.',
   'EcoBee Sdn. Bhd.',
+  'Qingdao Promaz Medical Technology Co., Ltd',
 ] as const;
 export type YLCompany = typeof YL_COMPANIES[number];
 
@@ -47,9 +46,37 @@ export interface Invite {
   invitedAt: Date;
 }
 
+export interface Supplier {
+  id: string;
+  name: string;
+  email: string;
+  contactPerson?: string;
+  phone?: string;
+  address?: string;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ComplaintReply {
+  receivedAt: string; // ISO date — stored as string to avoid nested Firestore Timestamp arrays
+  from: string;
+  message: string;
+  loggedBy: string;
+  loggedAt: string;
+}
+
+export interface Letterhead {
+  company: string;
+  dataUrl: string;
+  uploadedBy: string;
+  uploadedAt: Date;
+}
+
 export interface Complaint {
   id: string;
   complaintNo: string;
+  ylCompany?: string;
   recordedBy: string;
   recordedByUid: string;
   dateRecorded: Date;
@@ -61,6 +88,7 @@ export interface Complaint {
   emailAddress?: string;
   // Product
   factory: string;
+  factoryId?: string;
   brandName: string;
   productName: string;
   piNo: string;
@@ -81,6 +109,12 @@ export interface Complaint {
   dateIssuedToFactory?: Date;
   forwardedBy?: string;
   supplierResponseUrl?: string;
+  // Email tracking
+  emailSentAt?: Date;
+  emailSentBy?: string;
+  emailSentTo?: string[];
+  emailLastError?: string;
+  replies?: ComplaintReply[];
   reviewNotes?: string;
   reviewedBy?: string;
   reviewedAt?: Date;
@@ -102,6 +136,7 @@ export interface Inspection {
   customerPiNo: string;
   supplierPoNo: string;
   factory: string;
+  factoryId?: string;
   factoryCommitDate: Date;
   totalQtyCartons: number;
   product: string;
@@ -182,6 +217,7 @@ export interface PublicSubmission {
   natures?: ComplaintNature[];
   othersDescription?: string;
   // Inspection-specific
+  ylCompany?: string;
   factoryLocation?: string;
   factoryCommitDate?: Date;
   totalQtyCartons?: number;

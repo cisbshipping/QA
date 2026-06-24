@@ -1,20 +1,23 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
-import { createComplaint, updateComplaint, generateComplaintNo } from '@/lib/db';
-import { COMPLAINT_NATURES, type Complaint, type ComplaintNature } from '@/types';
+import { createComplaint, updateComplaint, generateComplaintNo, listSuppliers } from '@/lib/db';
+import { COMPLAINT_NATURES, type Complaint, type ComplaintNature, type Supplier } from '@/types';
+import { useCompanies } from '@/hooks/useCompanies';
 import { Button } from '@/components/ui/Button';
-import { Input, Textarea } from '@/components/ui/Input';
+import { Input, Textarea, Select } from '@/components/ui/Input';
 import { CardBody, CardFooter } from '@/components/ui/Card';
 
 const schema = z.object({
+  ylCompany: z.string().min(1, 'Required'),
   consignee: z.string().min(1, 'Required'),
   contactPerson: z.string().optional(),
   phoneNo: z.string().optional(),
   emailAddress: z.string().email('Invalid email').optional().or(z.literal('')),
-  factory: z.string().min(1, 'Required'),
+  factoryId: z.string().min(1, 'Pick a supplier'),
   brandName: z.string().min(1, 'Required'),
   productName: z.string().min(1, 'Required'),
   piNo: z.string().min(1, 'Required'),
@@ -43,17 +46,22 @@ interface Props {
 export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
   const { user, appUser } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [complaintNo, setComplaintNo] = useState(existing?.complaintNo ?? '');
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(true);
+  const companies = useCompanies();
 
   const { register, handleSubmit, control, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: existing
       ? {
+          ylCompany: existing.ylCompany ?? '',
           consignee: existing.consignee,
           contactPerson: existing.contactPerson ?? '',
           phoneNo: existing.phoneNo ?? '',
           emailAddress: existing.emailAddress ?? '',
-          factory: existing.factory,
+          factoryId: existing.factoryId ?? '',
           brandName: existing.brandName,
           productName: existing.productName,
           piNo: existing.piNo,
@@ -79,15 +87,28 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
     }
   }, [existing]);
 
+  useEffect(() => {
+    listSuppliers()
+      .then(setSuppliers)
+      .finally(() => setLoadingSuppliers(false));
+  }, []);
+
   const hasReturn = watch('hasDefectiveSampleReturn');
   const selectedNatures = watch('natures') as string[];
 
   const onSubmit = async (data: FormData) => {
-    if (!user || !appUser) return;
+    if (!user || !appUser) {
+      setSubmitError('You are not signed in. Please refresh and try again.');
+      return;
+    }
     setLoading(true);
+    setSubmitError('');
     try {
-      const payload = {
+      const picked = suppliers.find(s => s.id === data.factoryId);
+      // Strip undefined fields — Firestore rejects them.
+      const raw = {
         complaintNo,
+        ylCompany: data.ylCompany,
         recordedBy: appUser.name,
         recordedByUid: user.uid,
         dateRecorded: existing?.dateRecorded ?? new Date(),
@@ -95,7 +116,8 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
         contactPerson: data.contactPerson,
         phoneNo: data.phoneNo,
         emailAddress: data.emailAddress,
-        factory: data.factory,
+        factory: picked?.name ?? existing?.factory ?? '',
+        factoryId: data.factoryId,
         brandName: data.brandName,
         productName: data.productName,
         piNo: data.piNo,
@@ -113,23 +135,36 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
         forwardedBy: data.forwardedBy,
         status: (existing?.status ?? 'open') as Complaint['status'],
       };
+      const payload = Object.fromEntries(
+        Object.entries(raw).filter(([, v]) => v !== undefined && v !== '')
+      ) as typeof raw;
 
       if (existing) {
         await updateComplaint(existing.id, payload, user.uid, appUser.name, 'edited');
       } else {
-        await createComplaint(payload);
+        await createComplaint(payload as Omit<Complaint, 'id' | 'createdAt' | 'updatedAt'>);
       }
       onSuccess();
+    } catch (err) {
+      const e = err as { code?: string; message?: string };
+      if (e.code === 'permission-denied' || e.message?.includes('insufficient permissions')) {
+        setSubmitError(`Permission denied. Your role (${appUser.role}) cannot create complaints, or Firestore rules are outdated.`);
+      } else {
+        setSubmitError(e.message ?? 'Failed to save complaint. Please try again.');
+      }
+      console.error('Complaint submit error:', err);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form onSubmit={handleSubmit(onSubmit, () => {
+      setTimeout(() => document.querySelector('[data-form-error-summary]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+    })}>
       <CardBody className="flex flex-col gap-6">
         {/* Header info */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">Complaint No.</label>
             <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-blue-700 font-semibold">
@@ -139,10 +174,19 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
           <Input label="Recorded by" value={appUser?.name ?? ''} disabled />
         </div>
 
+        {/* Company / letterhead */}
+        <Select
+          label="Company (letterhead for PDF export) *"
+          error={errors.ylCompany?.message}
+          options={companies.map(c => ({ value: c, label: c }))}
+          placeholder="Select company"
+          {...register('ylCompany')}
+        />
+
         {/* Customer details */}
         <fieldset className="border border-gray-200 rounded-lg p-4">
           <legend className="px-2 text-sm font-semibold text-gray-700">Customer Details</legend>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Consignee *" error={errors.consignee?.message} {...register('consignee')} />
             <Input label="Contact Person" {...register('contactPerson')} />
             <Input label="Phone No." {...register('phoneNo')} />
@@ -153,8 +197,26 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
         {/* Complaint info */}
         <fieldset className="border border-gray-200 rounded-lg p-4">
           <legend className="px-2 text-sm font-semibold text-gray-700">Complaint Information</legend>
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Factory / Supplier *" error={errors.factory?.message} {...register('factory')} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-gray-700">Factory / Supplier *</label>
+              <select
+                {...register('factoryId')}
+                disabled={loadingSuppliers}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">{loadingSuppliers ? 'Loading...' : 'Select supplier'}</option>
+                {suppliers.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}{s.email ? ` (${s.email})` : ''}</option>
+                ))}
+              </select>
+              {errors.factoryId && <p className="text-xs text-red-600">{errors.factoryId.message as string}</p>}
+              {!loadingSuppliers && suppliers.length === 0 && (
+                <p className="text-xs text-gray-500">
+                  No suppliers yet. <Link to="/suppliers" className="text-blue-600 hover:underline">Add a supplier first</Link> so the system knows where to send the PDF.
+                </p>
+              )}
+            </div>
             <Input label="Brand Name *" error={errors.brandName?.message} {...register('brandName')} />
             <Input label="Product Name *" error={errors.productName?.message} {...register('productName')} className="col-span-2" />
             <Input label="PI No. *" error={errors.piNo?.message} {...register('piNo')} />
@@ -236,10 +298,27 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
         <Textarea label="Description of Complaint *" rows={4} error={errors.description?.message} {...register('description')} />
 
         {/* Workflow fields */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input label="Date Issued to Factory" type="date" {...register('dateIssuedToFactory')} />
           <Input label="Forwarded By" {...register('forwardedBy')} />
         </div>
+
+        {Object.keys(errors).length > 0 && (
+          <div data-form-error-summary className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+            <p className="font-semibold mb-1">Please fix the following before submitting:</p>
+            <ul className="list-disc list-inside text-xs flex flex-col gap-0.5">
+              {Object.entries(errors).map(([key, err]) => (
+                <li key={key}><span className="font-medium">{key}</span>: {(err as { message?: string }).message ?? 'Required'}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {submitError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+            {submitError}
+          </div>
+        )}
       </CardBody>
 
       <CardFooter className="flex justify-end gap-3">
