@@ -218,7 +218,12 @@ export function ComplaintsPage() {
                         />
                       </td>
                     )}
-                    <td className="px-4 py-3 font-mono text-blue-700 font-medium">{c.complaintNo}</td>
+                    <td className="px-4 py-3 font-mono text-blue-700 font-medium">
+                      {c.complaintNo}
+                      {c.source === 'public' && (
+                        <span className="ml-2 px-1.5 py-0.5 text-[10px] font-semibold bg-purple-100 text-purple-700 rounded uppercase">Public</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-gray-900">{c.consignee}</td>
                     <td className="px-4 py-3 text-gray-600">{c.piNo}</td>
                     <td className="px-4 py-3 text-gray-600">{c.factory}</td>

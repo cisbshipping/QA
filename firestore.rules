@@ -44,14 +44,26 @@ service cloud.firestore {
 
     match /complaints/{id} {
       allow read: if isSignedIn();
-      allow create: if isEditor();
+      // Internal users: full create. Public: only if source=public, status=open, submitterEmail present.
+      allow create: if isEditor() || (
+        request.resource.data.source == 'public'
+        && request.resource.data.status == 'open'
+        && request.resource.data.submitterEmail is string
+        && request.resource.data.submitterEmail.matches('^[^@]+@[^@]+\\.[^@]+$')
+        && request.resource.data.description.size() < 5000
+      );
       allow update: if isEditor();
       allow delete: if isAdmin();
     }
 
     match /inspections/{id} {
       allow read: if isSignedIn();
-      allow create: if isEditor();
+      allow create: if isEditor() || (
+        request.resource.data.source == 'public'
+        && request.resource.data.status == 'pending'
+        && request.resource.data.submitterEmail is string
+        && request.resource.data.submitterEmail.matches('^[^@]+@[^@]+\\.[^@]+$')
+      );
       allow update: if isEditor();
       allow delete: if isAdmin();
     }

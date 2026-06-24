@@ -5,7 +5,7 @@ import {
   type QueryDocumentSnapshot, type DocumentData,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Complaint, Inspection, AppUser, AuditLog, Invite, UserRole, PublicSubmission, PublicSubmissionStatus, Letterhead, Supplier } from '@/types';
+import type { Complaint, Inspection, AppUser, AuditLog, Invite, UserRole, PublicSubmission, PublicSubmissionStatus, Letterhead, Supplier, SubmissionPhoto } from '@/types';
 
 function toDate(v: unknown): Date {
   if (v instanceof Timestamp) return v.toDate();
@@ -233,6 +233,79 @@ export async function generateSubmissionRef(type: 'complaint' | 'inspection'): P
   const prefix = type === 'complaint' ? `PC${yy}${mm}-` : `PI${yy}${mm}-`;
   const suffix = (Date.now() % 0x7fffffff).toString(36).toUpperCase().padStart(6, '0').slice(-6);
   return `${prefix}${suffix}`;
+}
+
+// Promote a public Complaint submission into the main `complaints` collection so QA can manage it
+// alongside internal records. Doc ID = the public reference number.
+export async function createComplaintFromPublic(refNo: string, p: PublicSubmission, photos: SubmissionPhoto[] = []): Promise<void> {
+  const factoryName = p.factorySupplier || '—';
+  const matched = (await listSuppliers()).find(s => s.name.toLowerCase() === factoryName.toLowerCase());
+  const raw: Record<string, unknown> = {
+    complaintNo: refNo,
+    source: 'public',
+    submitterEmail: p.submitterEmail,
+    submitterName: p.submitterName,
+    recordedBy: 'Public Submission',
+    recordedByUid: 'public',
+    dateRecorded: serverTimestamp(),
+    consignee: p.submitterCompany || p.submitterName,
+    contactPerson: p.submitterName,
+    emailAddress: p.submitterEmail,
+    factory: factoryName,
+    factoryId: matched?.id,
+    brandName: p.brandName || '—',
+    productName: p.productName || '—',
+    piNo: p.piNo || '—',
+    poNo: p.poNo,
+    lotNo: p.lotNo,
+    size: p.size,
+    quantityInvolved: p.quantityInvolved || '—',
+    hasDefectiveSamplePhoto: p.hasDefectiveSamplePhoto ?? false,
+    hasDefectiveSampleReturn: p.hasDefectiveSampleReturn ?? false,
+    returnSampleQty: p.returnSampleQty,
+    natures: p.natures ?? [],
+    othersDescription: p.othersDescription,
+    description: p.description,
+    photos: photos.length > 0 ? photos : undefined,
+    status: 'open',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  const clean = Object.fromEntries(Object.entries(raw).filter(([, v]) => v !== undefined && v !== ''));
+  await setDoc(doc(db, 'complaints', refNo), clean);
+}
+
+// Promote a public Inspection submission into the main `inspections` collection.
+export async function createInspectionFromPublic(refNo: string, p: PublicSubmission): Promise<void> {
+  const raw: Record<string, unknown> = {
+    source: 'public',
+    submitterEmail: p.submitterEmail,
+    submitterName: p.submitterName,
+    picName: 'Public Submission',
+    picUid: 'public',
+    department: p.submitterCompany || '—',
+    dateRequested: serverTimestamp(),
+    company: p.ylCompany || '—',
+    customer: p.submitterCompany || p.submitterName,
+    customerPiNo: p.customerPiNo || refNo,
+    supplierPoNo: '—',
+    factory: p.factoryLocation || '—',
+    factoryCommitDate: p.factoryCommitDate ?? new Date(),
+    totalQtyCartons: p.totalQtyCartons ?? 0,
+    product: p.productInfo || '—',
+    reasonForRequest: p.description || '—',
+    focusAreas: [],
+    aqlLevel: 'other',
+    inspectorTypes: ['in-house'],
+    needsPsiReport: false,
+    requestedByName: p.submitterName,
+    requestedByDate: serverTimestamp(),
+    status: 'pending',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  const clean = Object.fromEntries(Object.entries(raw).filter(([, v]) => v !== undefined && v !== ''));
+  await setDoc(doc(db, 'inspections', refNo), clean);
 }
 
 export async function createPublicSubmission(data: Omit<PublicSubmission, 'id' | 'createdAt' | 'status'>): Promise<string> {

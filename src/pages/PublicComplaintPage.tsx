@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { createPublicSubmission, generateSubmissionRef, listSuppliers } from '@/lib/db';
+import { createPublicSubmission, generateSubmissionRef, listSuppliers, createComplaintFromPublic } from '@/lib/db';
 import { COMPLAINT_NATURES, type ComplaintNature, type SubmissionPhoto, type Supplier } from '@/types';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -127,8 +127,8 @@ export function PublicComplaintPage() {
         setProgress('Saving submission...');
       }
 
-      await createPublicSubmission({
-        type: 'complaint',
+      const submissionPayload = {
+        type: 'complaint' as const,
         referenceNo: refNo,
         submitterName: data.submitterName,
         submitterEmail: data.submitterEmail,
@@ -148,7 +148,16 @@ export function PublicComplaintPage() {
         natures: data.natures as ComplaintNature[],
         othersDescription: data.othersDescription,
         description: data.description,
-      });
+      };
+      await createPublicSubmission(submissionPayload);
+      // Also create a record in the main complaints collection so QA sees it in Complaints Management.
+      // Best-effort: if this fails, the publicSubmissions record still exists in the Inbox.
+      try {
+        const fakeSubmission = { ...submissionPayload, id: refNo, status: 'new' as const, createdAt: new Date() };
+        await createComplaintFromPublic(refNo, fakeSubmission, uploaded);
+      } catch (e) {
+        console.error('Failed to mirror to complaints collection:', e);
+      }
       previews.forEach(URL.revokeObjectURL);
       navigate(`/submit/thank-you?ref=${refNo}`);
     } catch (err) {

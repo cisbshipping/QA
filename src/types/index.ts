@@ -77,6 +77,9 @@ export interface Complaint {
   id: string;
   complaintNo: string;
   ylCompany?: string;
+  source?: 'internal' | 'public';
+  submitterEmail?: string;
+  submitterName?: string;
   recordedBy: string;
   recordedByUid: string;
   dateRecorded: Date;
@@ -137,6 +140,9 @@ export interface Inspection {
   id: string;
   picName: string;
   picUid: string;
+  source?: 'internal' | 'public';
+  submitterEmail?: string;
+  submitterName?: string;
   department: string;
   dateRequested: Date;
   // Order info

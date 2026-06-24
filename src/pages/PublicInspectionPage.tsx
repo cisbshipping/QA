@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { createPublicSubmission, generateSubmissionRef } from '@/lib/db';
+import { createPublicSubmission, generateSubmissionRef, createInspectionFromPublic } from '@/lib/db';
 import { useCompanies } from '@/hooks/useCompanies';
 import { Input, Textarea, Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -41,8 +41,8 @@ export function PublicInspectionPage() {
     setError('');
     try {
       const refNo = await generateSubmissionRef('inspection');
-      await createPublicSubmission({
-        type: 'inspection',
+      const submissionPayload = {
+        type: 'inspection' as const,
         referenceNo: refNo,
         submitterName: data.submitterName,
         submitterEmail: data.submitterEmail,
@@ -55,7 +55,15 @@ export function PublicInspectionPage() {
         totalQtyCartons: Number(data.totalQtyCartons),
         productInfo: data.productInfo,
         description: data.description,
-      });
+      };
+      await createPublicSubmission(submissionPayload);
+      // Mirror into the main inspections collection so QA sees it in Inspections Management.
+      try {
+        const fakeSubmission = { ...submissionPayload, id: refNo, status: 'new' as const, createdAt: new Date() };
+        await createInspectionFromPublic(refNo, fakeSubmission);
+      } catch (e) {
+        console.error('Failed to mirror to inspections collection:', e);
+      }
       navigate(`/submit/thank-you?ref=${refNo}`);
     } catch (err) {
       setError((err as Error).message || 'Failed to submit. Please try again.');
