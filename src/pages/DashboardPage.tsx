@@ -55,6 +55,45 @@ export function DashboardPage() {
   const recentComplaints = complaints.slice(0, 5);
   const recentInspections = inspections.slice(0, 5);
 
+  // ---- Performance KPIs ----
+  const kpis = useMemo(() => {
+    // Inspection reject rate: rejected / (all reviewed, i.e. not pending)
+    const reviewedInspections = inspections.filter(i => i.status !== 'pending');
+    const rejectedInspections = inspections.filter(i => i.status === 'rejected');
+    const rejectRate = reviewedInspections.length === 0
+      ? null
+      : (rejectedInspections.length / reviewedInspections.length) * 100;
+
+    // Inspection date within 5 days of cargo (factory) ready date.
+    // Count inspections that have BOTH inspectionDate and factoryCommitDate set,
+    // and where 0 <= (commit - inspection) <= 5 days (i.e. inspection happens within the 5 days leading up to ready date).
+    const inspWithBothDates = inspections.filter(i => i.inspectionDate && i.factoryCommitDate);
+    const onTimeInspections = inspWithBothDates.filter(i => {
+      const inspDate = i.rescheduledDate ?? i.inspectionDate!;
+      const days = differenceInDays(i.factoryCommitDate, inspDate);
+      return days >= 0 && days <= 5;
+    });
+    const onTimeRate = inspWithBothDates.length === 0
+      ? null
+      : (onTimeInspections.length / inspWithBothDates.length) * 100;
+
+    // Complaint close-out within 14 working days.
+    const closedComplaintsList = complaints.filter(c => c.status === 'closed' && c.closedAt && c.dateRecorded);
+    const closedWithin14 = closedComplaintsList.filter(c => {
+      const businessDays = differenceInBusinessDays(c.closedAt!, c.dateRecorded);
+      return businessDays >= 0 && businessDays <= 14;
+    });
+    const closeOnTimeRate = closedComplaintsList.length === 0
+      ? null
+      : (closedWithin14.length / closedComplaintsList.length) * 100;
+
+    return {
+      rejectRate, rejectedCount: rejectedInspections.length, reviewedCount: reviewedInspections.length,
+      onTimeRate, onTimeCount: onTimeInspections.length, withDatesCount: inspWithBothDates.length,
+      closeOnTimeRate, closeOnTimeCount: closedWithin14.length, closedCount: closedComplaintsList.length,
+    };
+  }, [complaints, inspections]);
+
   // Approaching inspections — accepted with commit/inspection date within 3 days
   const upcoming = useMemo(() => {
     const now = new Date();
@@ -122,6 +161,44 @@ export function DashboardPage() {
               icon={<TrendingUp className="w-6 h-6 text-purple-600" />} color="bg-purple-50" />
           </div>
 
+          {/* Performance KPIs */}
+          <div>
+            <div className="flex items-baseline justify-between mb-3">
+              <h2 className="text-base font-semibold text-gray-900">Performance Metrics</h2>
+              <p className="text-xs text-gray-500">Lower reject rate is better · higher on-time rate is better</p>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <KpiCard
+                title="Inspection Reject Rate"
+                value={kpis.rejectRate}
+                subtitle={kpis.rejectRate === null
+                  ? 'No reviewed inspections yet'
+                  : `${kpis.rejectedCount} rejected of ${kpis.reviewedCount} reviewed`}
+                icon={<XCircle className="w-5 h-5" />}
+                lowerIsBetter
+                green={10} amber={20}
+              />
+              <KpiCard
+                title="Inspection Within 5 Days of Cargo Ready"
+                value={kpis.onTimeRate}
+                subtitle={kpis.onTimeRate === null
+                  ? 'No inspections with both dates set yet'
+                  : `${kpis.onTimeCount} of ${kpis.withDatesCount} inspections`}
+                icon={<CalendarCheck className="w-5 h-5" />}
+                green={80} amber={60}
+              />
+              <KpiCard
+                title="Complaint Closed Within 14 Working Days"
+                value={kpis.closeOnTimeRate}
+                subtitle={kpis.closeOnTimeRate === null
+                  ? 'No closed complaints yet'
+                  : `${kpis.closeOnTimeCount} of ${kpis.closedCount} closed complaints`}
+                icon={<Timer className="w-5 h-5" />}
+                green={80} amber={60}
+              />
+            </div>
+          </div>
+
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <ComplaintsTrendChart complaints={complaints} />
@@ -180,6 +257,74 @@ export function DashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// ============== KPI card ==============
+
+interface KpiCardProps {
+  title: string;
+  value: number | null; // 0-100 percentage, or null when no data
+  subtitle: string;
+  icon: React.ReactNode;
+  green: number; // threshold for green (>= green is good unless lowerIsBetter)
+  amber: number; // threshold for amber
+  lowerIsBetter?: boolean;
+}
+
+function KpiCard({ title, value, subtitle, icon, green, amber, lowerIsBetter }: KpiCardProps) {
+  let status: 'good' | 'warn' | 'bad' | 'none' = 'none';
+  if (value !== null) {
+    if (lowerIsBetter) {
+      // For reject rate: smaller = good
+      if (value <= green) status = 'good';
+      else if (value <= amber) status = 'warn';
+      else status = 'bad';
+    } else {
+      // For on-time rates: larger = good
+      if (value >= green) status = 'good';
+      else if (value >= amber) status = 'warn';
+      else status = 'bad';
+    }
+  }
+
+  const styles = {
+    none: { ring: 'border-gray-200', text: 'text-gray-400', bg: 'bg-gray-50', iconColor: 'text-gray-400' },
+    good: { ring: 'border-green-200', text: 'text-green-700', bg: 'bg-green-50', iconColor: 'text-green-600' },
+    warn: { ring: 'border-amber-200', text: 'text-amber-700', bg: 'bg-amber-50', iconColor: 'text-amber-600' },
+    bad:  { ring: 'border-red-200',   text: 'text-red-700',   bg: 'bg-red-50',   iconColor: 'text-red-600' },
+  }[status];
+
+  return (
+    <Card className={styles.ring}>
+      <CardBody className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-gray-700">{title}</p>
+          <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${styles.bg} ${styles.iconColor}`}>
+            {icon}
+          </div>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <p className={`text-3xl font-bold ${styles.text}`}>
+            {value === null ? '—' : `${value.toFixed(0)}%`}
+          </p>
+        </div>
+        <p className="text-xs text-gray-500">{subtitle}</p>
+        {/* Progress bar */}
+        {value !== null && (
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mt-1">
+            <div
+              className={`h-full rounded-full transition-all ${
+                status === 'good' ? 'bg-green-500' :
+                status === 'warn' ? 'bg-amber-500' :
+                status === 'bad'  ? 'bg-red-500' : 'bg-gray-300'
+              }`}
+              style={{ width: `${Math.max(2, Math.min(100, value))}%` }}
+            />
+          </div>
+        )}
+      </CardBody>
+    </Card>
   );
 }
 
