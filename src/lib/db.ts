@@ -44,19 +44,36 @@ function mapInspection(id: string, data: Record<string, unknown>): Inspection {
 }
 
 // Auto-number helpers
+// Format: CR-YYYY-MM{seq} — e.g. CR-2026-0701 for the first complaint in July 2026.
 export async function generateComplaintNo(): Promise<string> {
   const now = new Date();
-  const yy = String(now.getFullYear()).slice(-2);
+  const yyyy = now.getFullYear();
   const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const prefix = `CR${yy}-${mm}-`;
-  const q = query(collection(db, 'complaints'), where('complaintNo', '>=', prefix), where('complaintNo', '<', prefix + 'z'));
+  const prefix = `CR-${yyyy}-${mm}`;
+  const q = query(
+    collection(db, 'complaints'),
+    where('complaintNo', '>=', prefix),
+    where('complaintNo', '<', prefix + ''),
+  );
   const snap = await getDocs(q);
   const seq = snap.size + 1;
   return `${prefix}${String(seq).padStart(2, '0')}`;
 }
 
-export async function generateInspectionNo(piNo: string): Promise<string> {
-  return piNo.startsWith('PIN') ? piNo : piNo;
+// Format: IP-YYYY-MM{seq} — e.g. IP-2026-0701.
+export async function generateInspectionNo(): Promise<string> {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const prefix = `IP-${yyyy}-${mm}`;
+  const q = query(
+    collection(db, 'inspections'),
+    where('inspectionNo', '>=', prefix),
+    where('inspectionNo', '<', prefix + ''),
+  );
+  const snap = await getDocs(q);
+  const seq = snap.size + 1;
+  return `${prefix}${String(seq).padStart(2, '0')}`;
 }
 
 // Complaints CRUD

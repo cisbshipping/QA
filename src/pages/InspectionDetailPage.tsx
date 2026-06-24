@@ -230,12 +230,14 @@ export function InspectionDetailPage() {
         <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100">
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-gray-900 font-mono">{inspection.customerPiNo}</h1>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-xl font-bold text-gray-900 font-mono">{inspection.inspectionNo ?? '—'}</h1>
             <StatusBadge status={inspection.status} />
           </div>
-          <p className="text-sm text-gray-500 mt-0.5">Requested by {inspection.picName} on {fmtDate(inspection.dateRequested)}</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            PI <span className="font-mono">{inspection.customerPiNo}</span> · Requested by {inspection.picName} on {fmtDate(inspection.dateRequested)}
+          </p>
         </div>
         <div className="flex gap-2">
           {canEdit && inspection.status === 'pending' && (

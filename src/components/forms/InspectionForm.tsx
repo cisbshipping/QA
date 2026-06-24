@@ -4,7 +4,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
-import { createInspection, updateInspection, listSuppliers } from '@/lib/db';
+import { createInspection, updateInspection, listSuppliers, generateInspectionNo } from '@/lib/db';
 import { INSPECTION_FOCUS_AREAS, type Inspection, type YLCompany, type AqlLevel, type InspectorType, type Supplier, type ProductItem } from '@/types';
 import { useCompanies } from '@/hooks/useCompanies';
 import { Button } from '@/components/ui/Button';
@@ -123,7 +123,10 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
     setLoading(true);
     setSubmitError('');
     try {
+      // Generate the IP-YYYY-MM{seq} reference number for new requests; keep existing on edit.
+      const inspectionNo = existing?.inspectionNo ?? await generateInspectionNo();
       const raw = {
+        inspectionNo,
         picName: appUser.name,
         picUid: user.uid,
         department: data.department,

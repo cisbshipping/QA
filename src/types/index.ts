@@ -144,6 +144,7 @@ export interface InspectionAttempt {
 
 export interface Inspection {
   id: string;
+  inspectionNo?: string;
   picName: string;
   picUid: string;
   source?: 'internal' | 'public';
