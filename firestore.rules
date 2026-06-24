@@ -83,9 +83,11 @@ service cloud.firestore {
         && request.resource.data.description.size() < 5000;
       // Only QA/admin can read or update.
       // Public can look up a submission by exact reference number (= doc ID).
-      // Listing/querying still requires QA role.
       allow get: if true;
-      allow list, update: if isQA();
+      // Public can also query by PI No., capped to 10 results per query (used by /track).
+      // Wider listing still requires QA role.
+      allow list: if isQA() || (request.query.limit is int && request.query.limit <= 10);
+      allow update: if isQA();
       allow delete: if isAdmin();
     }
 

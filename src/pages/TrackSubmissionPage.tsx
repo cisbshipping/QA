@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { getSubmissionByRef } from '@/lib/db';
+import { getSubmissionByRef, findSubmissionsByPiNo } from '@/lib/db';
 import type { PublicSubmission } from '@/types';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { PublicSubmitLayout } from './PublicSubmitLayout';
 import { fmtDateTime, fmtDate } from '@/lib/utils';
 import { Search, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
+
+type Mode = 'ref' | 'pi';
 
 const STATUS_STYLE = {
   new: { label: 'In Review', icon: Clock, color: 'text-blue-700 bg-blue-50 border-blue-200' },
@@ -14,19 +16,30 @@ const STATUS_STYLE = {
 };
 
 export function TrackSubmissionPage() {
-  const [ref, setRef] = useState('');
-  const [result, setResult] = useState<PublicSubmission | null | 'not-found'>(null);
+  const [mode, setMode] = useState<Mode>('ref');
+  const [refInput, setRefInput] = useState('');
+  const [piInput, setPiInput] = useState('');
+  const [results, setResults] = useState<PublicSubmission[] | 'none' | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setResult(null);
+    setResults(null);
     setLoading(true);
     try {
-      const r = await getSubmissionByRef(ref.trim().toUpperCase());
-      setResult(r ?? 'not-found');
+      if (mode === 'ref') {
+        const refNo = refInput.trim().toUpperCase();
+        if (!refNo) { setError('Please enter a reference number.'); return; }
+        const r = await getSubmissionByRef(refNo);
+        setResults(r ? [r] : 'none');
+      } else {
+        const piNo = piInput.trim();
+        if (!piNo) { setError('Please enter a PI number.'); return; }
+        const rs = await findSubmissionsByPiNo(piNo);
+        setResults(rs.length > 0 ? rs : 'none');
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -34,45 +47,89 @@ export function TrackSubmissionPage() {
     }
   };
 
+  const currentInput = mode === 'ref' ? refInput : piInput;
+  const noneMessage = mode === 'ref'
+    ? `No submission matches "${refInput}". Check the reference number for typos.`
+    : `No submissions found with PI No. "${piInput}".`;
+
   return (
     <PublicSubmitLayout
       title="Track Your Submission"
-      subtitle="Enter the reference number you received after submitting."
+      subtitle="Look up by reference number or by PI number."
     >
       <form onSubmit={handleLookup} className="flex flex-col gap-4">
-        <Input
-          label="Reference Number"
-          value={ref}
-          onChange={e => setRef(e.target.value)}
-          placeholder="e.g. PC2606-A3F4Q1"
-          required
-          autoFocus
-        />
+        {/* Mode toggle */}
+        <div className="inline-flex bg-gray-100 rounded-lg p-0.5 w-fit">
+          <button
+            type="button"
+            onClick={() => { setMode('ref'); setResults(null); setError(''); }}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${mode === 'ref' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}
+          >
+            By Reference No.
+          </button>
+          <button
+            type="button"
+            onClick={() => { setMode('pi'); setResults(null); setError(''); }}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${mode === 'pi' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}
+          >
+            By PI No.
+          </button>
+        </div>
+
+        {mode === 'ref' ? (
+          <Input
+            key="ref"
+            label="Reference Number"
+            value={refInput}
+            onChange={e => setRefInput(e.target.value)}
+            placeholder="e.g. PC2606-A3F4Q1"
+            autoFocus
+          />
+        ) : (
+          <Input
+            key="pi"
+            label="PI No."
+            value={piInput}
+            onChange={e => setPiInput(e.target.value)}
+            placeholder="e.g. PIN26040028"
+            hint="Match must be exact (case sensitive)"
+            autoFocus
+          />
+        )}
+
         {error && (
           <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
-        <Button type="submit" loading={loading} size="lg">
+
+        <Button type="submit" loading={loading} size="lg" disabled={!currentInput.trim()}>
           <Search className="w-4 h-4" /> Track Submission
         </Button>
       </form>
 
-      {result === 'not-found' && (
+      {results === 'none' && (
         <div className="mt-6 flex items-start gap-3 bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-900">
           <AlertCircle className="w-5 h-5 shrink-0" />
           <div>
-            <p className="font-semibold mb-0.5">Not found</p>
-            <p>No submission matches "{ref}". Check the reference number for typos.</p>
+            <p className="font-semibold mb-0.5">No results</p>
+            <p>{noneMessage}</p>
           </div>
         </div>
       )}
 
-      {result && result !== 'not-found' && (
+      {Array.isArray(results) && results.length > 0 && (
         <div className="mt-6 flex flex-col gap-4">
-          <StatusCard submission={result} />
-          <DetailsCard submission={result} />
+          {results.length > 1 && (
+            <p className="text-sm text-gray-600">Found {results.length} submissions matching this PI No.</p>
+          )}
+          {results.map(r => (
+            <div key={r.id} className="flex flex-col gap-4">
+              <StatusCard submission={r} />
+              <DetailsCard submission={r} />
+            </div>
+          ))}
         </div>
       )}
     </PublicSubmitLayout>
@@ -111,9 +168,13 @@ function DetailsCard({ submission: s }: { submission: PublicSubmission }) {
         <p className="font-mono font-semibold text-blue-700">{s.referenceNo}</p>
         <span className="text-xs text-gray-500 capitalize">{s.type}</span>
       </div>
-      <p className="text-gray-700">{s.submitterName} · {s.submitterCompany}</p>
-      {s.type === 'inspection' && s.customerPiNo && <p className="text-xs text-gray-600">PI No. {s.customerPiNo} · {s.factoryLocation} · {fmtDate(s.factoryCommitDate)}</p>}
-      {s.type === 'complaint' && s.factorySupplier && <p className="text-xs text-gray-600">Factory: {s.factorySupplier} · PI {s.piNo}</p>}
+      <p className="text-gray-700">{s.submitterName}</p>
+      {s.type === 'inspection' && s.customerPiNo && (
+        <p className="text-xs text-gray-600">PI No. {s.customerPiNo} · {s.factoryLocation} · {fmtDate(s.factoryCommitDate)}</p>
+      )}
+      {s.type === 'complaint' && s.factorySupplier && (
+        <p className="text-xs text-gray-600">Factory: {s.factorySupplier} · PI {s.piNo}</p>
+      )}
     </div>
   );
 }

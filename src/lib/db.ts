@@ -335,6 +335,32 @@ export async function getSubmissionByRef(referenceNo: string): Promise<PublicSub
   return mapSubmission(snap.id, snap.data() as Record<string, unknown>);
 }
 
+/**
+ * Look up all public submissions matching a given PI No.
+ * Complaints store the PI No. in `piNo`, inspections in `customerPiNo` — query both.
+ * Limited to 10 results per field to satisfy the public-list Firestore rule.
+ */
+export async function findSubmissionsByPiNo(piNo: string): Promise<PublicSubmission[]> {
+  const trimmed = piNo.trim();
+  if (!trimmed) return [];
+  const col = collection(db, 'publicSubmissions');
+  const [byPi, byCustomerPi] = await Promise.all([
+    getDocs(query(col, where('piNo', '==', trimmed), limit(10))).catch(() => null),
+    getDocs(query(col, where('customerPiNo', '==', trimmed), limit(10))).catch(() => null),
+  ]);
+  const out: PublicSubmission[] = [];
+  const seen = new Set<string>();
+  for (const snap of [byPi, byCustomerPi]) {
+    if (!snap) continue;
+    for (const d of snap.docs) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      out.push(mapSubmission(d.id, d.data() as Record<string, unknown>));
+    }
+  }
+  return out.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+}
+
 export async function listPublicSubmissions(): Promise<PublicSubmission[]> {
   const q = query(collection(db, 'publicSubmissions'), orderBy('createdAt', 'desc'));
   const snap = await getDocs(q);
