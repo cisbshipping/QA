@@ -127,6 +127,12 @@ export interface Complaint {
   updatedAt: Date;
 }
 
+export interface ProductItem {
+  product: string;
+  standard?: string;
+  grade?: string;
+}
+
 export interface InspectionAttempt {
   attemptNo: number;
   scheduledDate: string; // ISO
@@ -158,6 +164,7 @@ export interface Inspection {
   product: string;
   productStandard?: string;
   productGrade?: string;
+  additionalProducts?: ProductItem[];
   containerSize?: string;
   // Criteria acknowledgements
   criteriaNotIndustrial: boolean;
@@ -240,6 +247,13 @@ export interface PublicSubmission {
   factoryCommitDate?: Date;
   totalQtyCartons?: number;
   customerPiNo?: string;
+  productStandard?: string;
+  productGrade?: string;
+  additionalProducts?: ProductItem[];
+  aqlLevel?: string;
+  focusAreas?: string[];
+  focusOthers?: string;
+  needsPsiReport?: boolean;
   // Workflow
   status: PublicSubmissionStatus;
   processedBy?: string;

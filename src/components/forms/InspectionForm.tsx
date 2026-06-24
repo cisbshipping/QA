@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
 import { createInspection, updateInspection, listSuppliers } from '@/lib/db';
-import { INSPECTION_FOCUS_AREAS, type Inspection, type YLCompany, type AqlLevel, type InspectorType, type Supplier } from '@/types';
+import { INSPECTION_FOCUS_AREAS, type Inspection, type YLCompany, type AqlLevel, type InspectorType, type Supplier, type ProductItem } from '@/types';
 import { useCompanies } from '@/hooks/useCompanies';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Input';
@@ -15,7 +15,6 @@ const schema = z.object({
   department: z.string().min(1, 'Required'),
   company: z.string().min(1, 'Required'),
   customer: z.string().min(1, 'Required'),
-  customerCountry: z.string().optional(),
   customerPiNo: z.string().min(1, 'Required'),
   supplierPoNo: z.string().min(1, 'Required'),
   factoryId: z.string().min(1, 'Pick a supplier'),
@@ -24,7 +23,6 @@ const schema = z.object({
   product: z.string().min(1, 'Required'),
   productStandard: z.string().optional(),
   productGrade: z.string().optional(),
-  containerSize: z.string().optional(),
   reasonForRequest: z.string().min(1, 'Required'),
   focusAreas: z.array(z.string()),
   focusOthers: z.string().optional(),
@@ -65,6 +63,11 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(true);
   const companies = useCompanies();
+  const [additionalProducts, setAdditionalProducts] = useState<ProductItem[]>(existing?.additionalProducts ?? []);
+  const addProductRow = () => setAdditionalProducts(p => [...p, { product: '', standard: '', grade: '' }]);
+  const updateProductRow = (i: number, field: keyof ProductItem, value: string) =>
+    setAdditionalProducts(p => p.map((row, idx) => idx === i ? { ...row, [field]: value } : row));
+  const removeProductRow = (i: number) => setAdditionalProducts(p => p.filter((_, idx) => idx !== i));
 
   useEffect(() => {
     listSuppliers()
@@ -80,7 +83,6 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
           department: existing.department,
           company: existing.company,
           customer: existing.customer,
-          customerCountry: existing.customerCountry ?? '',
           customerPiNo: existing.customerPiNo,
           supplierPoNo: existing.supplierPoNo,
           factoryId: existing.factoryId ?? '',
@@ -89,7 +91,6 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
           product: existing.product,
           productStandard: existing.productStandard ?? '',
           productGrade: existing.productGrade ?? '',
-          containerSize: existing.containerSize ?? '',
           reasonForRequest: existing.reasonForRequest,
           focusAreas: existing.focusAreas,
           focusOthers: existing.focusOthers ?? '',
@@ -129,7 +130,6 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
         dateRequested: existing?.dateRequested ?? new Date(),
         company: data.company as YLCompany,
         customer: data.customer,
-        customerCountry: data.customerCountry,
         customerPiNo: data.customerPiNo,
         supplierPoNo: data.supplierPoNo,
         factory: suppliers.find(s => s.id === data.factoryId)?.name ?? existing?.factory ?? '',
@@ -139,7 +139,7 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
         product: data.product,
         productStandard: data.productStandard,
         productGrade: data.productGrade,
-        containerSize: data.containerSize,
+        additionalProducts: additionalProducts.filter(p => p.product.trim() !== ''),
         reasonForRequest: data.reasonForRequest,
         focusAreas: data.focusAreas,
         focusOthers: data.focusOthers,
@@ -206,10 +206,7 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
                 />
               )}
             />
-            <div className="grid grid-cols-2 gap-2 col-span-1">
-              <Input label="Customer *" error={errors.customer?.message} {...register('customer')} />
-              <Input label="Country" {...register('customerCountry')} />
-            </div>
+            <Input label="Customer *" error={errors.customer?.message} {...register('customer')} />
             <Input label="Customer PI No. *" error={errors.customerPiNo?.message} {...register('customerPiNo')} />
             <Input label="Supplier PO No. *" error={errors.supplierPoNo?.message} {...register('supplierPoNo')} />
             <div className="flex flex-col gap-1">
@@ -233,7 +230,6 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
             </div>
             <Input label="Factory Commit Date *" type="date" error={errors.factoryCommitDate?.message} {...register('factoryCommitDate')} hint="Request inspection 2–4 weeks before commit date" />
             <Input label="Total Quantity (Cartons) *" type="number" error={errors.totalQtyCartons?.message} {...register('totalQtyCartons')} />
-            <Input label="Container Size" {...register('containerSize')} placeholder="e.g. 40HC" />
           </div>
         </fieldset>
 
@@ -252,6 +248,38 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
               <Input label="Standard (optional)" {...register('productStandard')} placeholder="e.g. USAW" />
               <Input label="Grade (optional)" {...register('productGrade')} placeholder="e.g. WTT AQL 1.5" />
             </div>
+
+            {/* Additional products (optional, multiple) */}
+            {additionalProducts.map((row, i) => (
+              <div key={i} className="border border-dashed border-gray-300 rounded-lg p-3 flex flex-col gap-2 relative">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-500 uppercase">Additional Product {i + 1}</span>
+                  <button type="button" onClick={() => removeProductRow(i)} className="p-1 rounded hover:bg-red-50 text-red-500" title="Remove">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                </div>
+                <Textarea
+                  label="Product *"
+                  rows={2}
+                  value={row.product}
+                  onChange={e => updateProductRow(i, 'product', e.target.value)}
+                  placeholder="Product description"
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input label="Standard (optional)" value={row.standard ?? ''} onChange={e => updateProductRow(i, 'standard', e.target.value)} />
+                  <Input label="Grade (optional)" value={row.grade ?? ''} onChange={e => updateProductRow(i, 'grade', e.target.value)} />
+                </div>
+              </div>
+            ))}
+
+            <button
+              type="button"
+              onClick={addProductRow}
+              className="inline-flex items-center justify-center gap-1 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-medium px-3 py-2 rounded border border-dashed border-blue-300 hover:border-blue-500 transition-colors w-fit"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+              Add another product
+            </button>
           </div>
         </fieldset>
 
