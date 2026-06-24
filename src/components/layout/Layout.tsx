@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
+import { MobileBottomNav } from './MobileBottomNav';
 import { Menu, ShieldCheck } from 'lucide-react';
 
 export function Layout() {
@@ -24,10 +25,13 @@ export function Layout() {
           </div>
         </header>
 
-        <main className="flex-1 min-w-0 overflow-auto">
+        {/* Main content — pad bottom on mobile so it isn't hidden behind the bottom nav */}
+        <main className="flex-1 min-w-0 overflow-auto pb-20 lg:pb-0">
           <Outlet />
         </main>
       </div>
+
+      <MobileBottomNav />
     </div>
   );
 }
