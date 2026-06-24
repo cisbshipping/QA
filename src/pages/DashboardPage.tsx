@@ -7,7 +7,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/Badge';
 import { fmtDate } from '@/lib/utils';
 import { FileText, ClipboardList, AlertCircle, CheckCircle2, Clock, TrendingUp, AlertTriangle, XCircle, CalendarCheck, Timer } from 'lucide-react';
-import { differenceInDays, differenceInBusinessDays, startOfMonth, subMonths, format, isSameMonth } from 'date-fns';
+import { differenceInDays, differenceInBusinessDays, startOfMonth, endOfMonth, subMonths, format, isSameMonth, isWithinInterval } from 'date-fns';
 
 interface StatCardProps {
   label: string;
@@ -55,19 +55,61 @@ export function DashboardPage() {
   const recentComplaints = complaints.slice(0, 5);
   const recentInspections = inspections.slice(0, 5);
 
-  // ---- Performance KPIs ----
+  // ---- Period selector (which month/range to compute KPIs for) ----
+  const [periodKey, setPeriodKey] = useState<string>('current'); // 'current' | 'last' | 'all' | 'YYYY-MM'
+  const period = useMemo(() => {
+    const now = new Date();
+    if (periodKey === 'all') {
+      return { label: 'All time', start: null as Date | null, end: null as Date | null };
+    }
+    if (periodKey === 'current') {
+      return { label: format(now, 'MMMM yyyy'), start: startOfMonth(now), end: endOfMonth(now) };
+    }
+    if (periodKey === 'last') {
+      const d = subMonths(now, 1);
+      return { label: format(d, 'MMMM yyyy'), start: startOfMonth(d), end: endOfMonth(d) };
+    }
+    // 'YYYY-MM'
+    const [y, m] = periodKey.split('-').map(Number);
+    const d = new Date(y, m - 1, 1);
+    return { label: format(d, 'MMMM yyyy'), start: startOfMonth(d), end: endOfMonth(d) };
+  }, [periodKey]);
+
+  const isInPeriod = (date: Date | undefined | null) => {
+    if (!date) return false;
+    if (!period.start || !period.end) return true; // all time
+    return isWithinInterval(date, { start: period.start, end: period.end });
+  };
+
+  const periodOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [
+      { value: 'current', label: 'This month' },
+      { value: 'last', label: 'Last month' },
+    ];
+    const now = new Date();
+    for (let i = 2; i <= 11; i++) {
+      const d = subMonths(now, i);
+      opts.push({ value: format(d, 'yyyy-MM'), label: format(d, 'MMMM yyyy') });
+    }
+    opts.push({ value: 'all', label: 'All time' });
+    return opts;
+  }, []);
+
+  // ---- Performance KPIs (filtered by period) ----
   const kpis = useMemo(() => {
-    // Inspection reject rate: rejected / (all reviewed, i.e. not pending)
-    const reviewedInspections = inspections.filter(i => i.status !== 'pending');
-    const rejectedInspections = inspections.filter(i => i.status === 'rejected');
+    // Inspection reject rate: rejected / (reviewed), scoped to inspections REQUESTED within the period.
+    const periodInspections = inspections.filter(i => isInPeriod(i.dateRequested));
+    const reviewedInspections = periodInspections.filter(i => i.status !== 'pending');
+    const rejectedInspections = periodInspections.filter(i => i.status === 'rejected');
     const rejectRate = reviewedInspections.length === 0
       ? null
       : (rejectedInspections.length / reviewedInspections.length) * 100;
 
-    // Inspection date within 5 days of cargo (factory) ready date.
-    // Count inspections that have BOTH inspectionDate and factoryCommitDate set,
-    // and where 0 <= (commit - inspection) <= 5 days (i.e. inspection happens within the 5 days leading up to ready date).
-    const inspWithBothDates = inspections.filter(i => i.inspectionDate && i.factoryCommitDate);
+    // Inspection date within 5 days of cargo ready date. Scope: inspections with a scheduled date IN the period.
+    const inspWithBothDates = inspections.filter(i => {
+      const d = i.rescheduledDate ?? i.inspectionDate;
+      return d && i.factoryCommitDate && isInPeriod(d);
+    });
     const onTimeInspections = inspWithBothDates.filter(i => {
       const inspDate = i.rescheduledDate ?? i.inspectionDate!;
       const days = differenceInDays(i.factoryCommitDate, inspDate);
@@ -77,8 +119,9 @@ export function DashboardPage() {
       ? null
       : (onTimeInspections.length / inspWithBothDates.length) * 100;
 
-    // Complaint close-out within 14 working days.
-    const closedComplaintsList = complaints.filter(c => c.status === 'closed' && c.closedAt && c.dateRecorded);
+    // Complaint close-out within 14 working days. Scope: complaints CLOSED in the period.
+    const closedComplaintsList = complaints.filter(c =>
+      c.status === 'closed' && c.closedAt && c.dateRecorded && isInPeriod(c.closedAt));
     const closedWithin14 = closedComplaintsList.filter(c => {
       const businessDays = differenceInBusinessDays(c.closedAt!, c.dateRecorded);
       return businessDays >= 0 && businessDays <= 14;
@@ -92,7 +135,8 @@ export function DashboardPage() {
       onTimeRate, onTimeCount: onTimeInspections.length, withDatesCount: inspWithBothDates.length,
       closeOnTimeRate, closeOnTimeCount: closedWithin14.length, closedCount: closedComplaintsList.length,
     };
-  }, [complaints, inspections]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complaints, inspections, periodKey]);
 
   // Approaching inspections — accepted with commit/inspection date within 3 days
   const upcoming = useMemo(() => {
@@ -162,42 +206,59 @@ export function DashboardPage() {
           </div>
 
           {/* Performance KPIs */}
-          <div>
-            <div className="flex items-baseline justify-between mb-3">
-              <h2 className="text-base font-semibold text-gray-900">Performance Metrics</h2>
-              <p className="text-xs text-gray-500">Lower reject rate is better · higher on-time rate is better</p>
+          <section aria-labelledby="metrics-heading">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+              <div>
+                <h2 id="metrics-heading" className="text-base font-semibold text-gray-900">Performance Metrics</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Showing data for <span className="font-medium text-gray-700">{period.label}</span></p>
+              </div>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <label htmlFor="period-select" className="text-xs text-gray-500 whitespace-nowrap">Period</label>
+                <select
+                  id="period-select"
+                  value={periodKey}
+                  onChange={e => setPeriodKey(e.target.value)}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[40px] min-w-[150px]"
+                >
+                  {periodOptions.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
               <KpiCard
                 title="Inspection Reject Rate"
+                target="Target ≥ 50%"
                 value={kpis.rejectRate}
                 subtitle={kpis.rejectRate === null
-                  ? 'No reviewed inspections yet'
+                  ? 'No reviewed inspections this period'
                   : `${kpis.rejectedCount} rejected of ${kpis.reviewedCount} reviewed`}
                 icon={<XCircle className="w-5 h-5" />}
-                lowerIsBetter
-                green={10} amber={20}
+                green={50} amber={30}
               />
               <KpiCard
                 title="Inspection Within 5 Days of Cargo Ready"
+                target="Target ≥ 80%"
                 value={kpis.onTimeRate}
                 subtitle={kpis.onTimeRate === null
-                  ? 'No inspections with both dates set yet'
+                  ? 'No inspections scheduled this period'
                   : `${kpis.onTimeCount} of ${kpis.withDatesCount} inspections`}
                 icon={<CalendarCheck className="w-5 h-5" />}
                 green={80} amber={60}
               />
               <KpiCard
                 title="Complaint Closed Within 14 Working Days"
+                target="Target ≥ 70%"
                 value={kpis.closeOnTimeRate}
                 subtitle={kpis.closeOnTimeRate === null
-                  ? 'No closed complaints yet'
-                  : `${kpis.closeOnTimeCount} of ${kpis.closedCount} closed complaints`}
+                  ? 'No closed complaints this period'
+                  : `${kpis.closeOnTimeCount} of ${kpis.closedCount} complaints`}
                 icon={<Timer className="w-5 h-5" />}
-                green={80} amber={60}
+                green={70} amber={50}
               />
             </div>
-          </div>
+          </section>
 
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -264,65 +325,76 @@ export function DashboardPage() {
 
 interface KpiCardProps {
   title: string;
+  target: string; // e.g. "Target ≥ 80%"
   value: number | null; // 0-100 percentage, or null when no data
   subtitle: string;
   icon: React.ReactNode;
-  green: number; // threshold for green (>= green is good unless lowerIsBetter)
-  amber: number; // threshold for amber
-  lowerIsBetter?: boolean;
+  green: number; // ≥ green = good
+  amber: number; // ≥ amber = ok; below = bad
 }
 
-function KpiCard({ title, value, subtitle, icon, green, amber, lowerIsBetter }: KpiCardProps) {
+function KpiCard({ title, target, value, subtitle, icon, green, amber }: KpiCardProps) {
   let status: 'good' | 'warn' | 'bad' | 'none' = 'none';
   if (value !== null) {
-    if (lowerIsBetter) {
-      // For reject rate: smaller = good
-      if (value <= green) status = 'good';
-      else if (value <= amber) status = 'warn';
-      else status = 'bad';
-    } else {
-      // For on-time rates: larger = good
-      if (value >= green) status = 'good';
-      else if (value >= amber) status = 'warn';
-      else status = 'bad';
-    }
+    if (value >= green) status = 'good';
+    else if (value >= amber) status = 'warn';
+    else status = 'bad';
   }
 
   const styles = {
-    none: { ring: 'border-gray-200', text: 'text-gray-400', bg: 'bg-gray-50', iconColor: 'text-gray-400' },
-    good: { ring: 'border-green-200', text: 'text-green-700', bg: 'bg-green-50', iconColor: 'text-green-600' },
-    warn: { ring: 'border-amber-200', text: 'text-amber-700', bg: 'bg-amber-50', iconColor: 'text-amber-600' },
-    bad:  { ring: 'border-red-200',   text: 'text-red-700',   bg: 'bg-red-50',   iconColor: 'text-red-600' },
+    none: { ring: 'border-gray-200', text: 'text-gray-400', bg: 'bg-gray-50', iconColor: 'text-gray-400', bar: 'bg-gray-300', badge: 'bg-gray-100 text-gray-500' },
+    good: { ring: 'border-green-200', text: 'text-green-700', bg: 'bg-green-50', iconColor: 'text-green-600', bar: 'bg-green-500', badge: 'bg-green-100 text-green-800' },
+    warn: { ring: 'border-amber-200', text: 'text-amber-700', bg: 'bg-amber-50', iconColor: 'text-amber-600', bar: 'bg-amber-500', badge: 'bg-amber-100 text-amber-800' },
+    bad:  { ring: 'border-red-200',   text: 'text-red-700',   bg: 'bg-red-50',   iconColor: 'text-red-600',   bar: 'bg-red-500',   badge: 'bg-red-100 text-red-800' },
   }[status];
 
+  const statusLabel = { good: 'On target', warn: 'Below target', bad: 'Off target', none: 'No data' }[status];
+
   return (
-    <Card className={styles.ring}>
-      <CardBody className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-gray-700">{title}</p>
-          <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${styles.bg} ${styles.iconColor}`}>
+    <Card className={`${styles.ring} hover:shadow-md transition-shadow`}>
+      <CardBody className="flex flex-col gap-3 py-5">
+        {/* Header row */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-gray-900 leading-snug">{title}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{target}</p>
+          </div>
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${styles.bg} ${styles.iconColor}`} aria-hidden>
             {icon}
           </div>
         </div>
-        <div className="flex items-baseline gap-2">
-          <p className={`text-3xl font-bold ${styles.text}`}>
+
+        {/* Value + status */}
+        <div className="flex items-baseline gap-3 flex-wrap">
+          <p className={`text-4xl font-bold tracking-tight tabular-nums ${styles.text}`} aria-label={`${title}: ${value === null ? 'no data' : value.toFixed(0) + ' percent'}`}>
             {value === null ? '—' : `${value.toFixed(0)}%`}
           </p>
+          {value !== null && (
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide ${styles.badge}`}>
+              {statusLabel}
+            </span>
+          )}
         </div>
-        <p className="text-xs text-gray-500">{subtitle}</p>
-        {/* Progress bar */}
+
+        {/* Progress bar with target marker */}
         {value !== null && (
-          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mt-1">
+          <div className="relative h-2 bg-gray-100 rounded-full overflow-visible">
             <div
-              className={`h-full rounded-full transition-all ${
-                status === 'good' ? 'bg-green-500' :
-                status === 'warn' ? 'bg-amber-500' :
-                status === 'bad'  ? 'bg-red-500' : 'bg-gray-300'
-              }`}
+              className={`h-full rounded-full transition-all ${styles.bar}`}
               style={{ width: `${Math.max(2, Math.min(100, value))}%` }}
+            />
+            {/* Target tick */}
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-0.5 h-3 bg-gray-700"
+              style={{ left: `${green}%` }}
+              title={`Target: ${green}%`}
+              aria-hidden
             />
           </div>
         )}
+
+        {/* Subtitle */}
+        <p className="text-xs text-gray-500 leading-relaxed">{subtitle}</p>
       </CardBody>
     </Card>
   );
