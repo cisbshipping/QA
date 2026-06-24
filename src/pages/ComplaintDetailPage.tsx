@@ -4,6 +4,7 @@ import { getComplaint, updateComplaint, getLetterhead, listSuppliers, setComplai
 import { generateComplaintPdf, pdfFilename } from '@/lib/pdf';
 import type { Supplier, Complaint } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
@@ -152,9 +153,10 @@ export function ComplaintDetailPage() {
     load();
   };
 
-  const canReview = appUser?.role === 'admin' || appUser?.role === 'qa' || appUser?.role === 'manager';
-  const canEdit = canReview;
-  const isAdmin = appUser?.role === 'admin';
+  const { can } = usePermissions();
+  const canReview = can('complaint.review');
+  const canEdit = can('complaint.edit');
+  const canReopen = can('complaint.reopen');
 
   const handleReopen = async () => {
     if (!complaint || !user || !appUser) return;
@@ -206,7 +208,7 @@ export function ComplaintDetailPage() {
               </Button>
             </>
           )}
-          {isAdmin && (complaint.status === 'closed' || complaint.status === 'rejected') && (
+          {canReopen && (complaint.status === 'closed' || complaint.status === 'rejected') && (
             <Button size="sm" variant="outline" onClick={handleReopen} title="Admin: reopen complaint">
               <Pencil className="w-4 h-4" /> Reopen
             </Button>

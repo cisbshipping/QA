@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
+import { PermissionsProvider } from '@/hooks/usePermissions';
 import { LoginCard } from '@/components/auth/LoginCard';
 import { Layout } from '@/components/layout/Layout';
 import { DashboardPage } from '@/pages/DashboardPage';
@@ -71,7 +72,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <PermissionsProvider>
+          <AppRoutes />
+        </PermissionsProvider>
       </AuthProvider>
     </BrowserRouter>
   );

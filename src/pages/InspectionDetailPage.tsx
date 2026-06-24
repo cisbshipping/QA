@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getInspection, updateInspection } from '@/lib/db';
 import { type Inspection } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
@@ -143,9 +144,13 @@ export function InspectionDetailPage() {
     }
   };
 
-  const canReview = appUser?.role === 'admin' || appUser?.role === 'qa' || appUser?.role === 'manager';
-  const canEdit = canReview;
-  const isAdmin = appUser?.role === 'admin';
+  const { can } = usePermissions();
+  const canReview = can('inspection.review');
+  const canEdit = can('inspection.edit');
+  const canRecordResult = can('inspection.result');
+  const canReschedule = can('inspection.reschedule');
+  const canRevert = can('inspection.revert');
+  const canReopen = can('inspection.reopen');
 
   // ---- Admin override actions ----
   const [showResched, setShowResched] = useState(false);
@@ -248,7 +253,7 @@ export function InspectionDetailPage() {
               </Button>
             </>
           )}
-          {canReview && (inspection.status === 'accepted' || inspection.status === 'rescheduled') && (
+          {canRecordResult && (inspection.status === 'accepted' || inspection.status === 'rescheduled') && (
             <>
               <Button variant="danger" size="sm" onClick={() => setShowResult('fail')}>
                 <XCircle className="w-4 h-4" /> Fail
@@ -372,7 +377,7 @@ export function InspectionDetailPage() {
           </Card>
 
           {/* Admin Override panel — admin-only controls to reschedule or backtrack */}
-          {isAdmin && inspection.status !== 'pending' && inspection.status !== 'rejected' && (
+          {(canReschedule || canRevert || canReopen) && inspection.status !== 'pending' && inspection.status !== 'rejected' && (
             <Card className="border-amber-200">
               <CardHeader className="bg-amber-50 border-amber-200">
                 <h2 className="font-semibold text-amber-900 flex items-center gap-2">
@@ -381,15 +386,17 @@ export function InspectionDetailPage() {
               </CardHeader>
               <CardBody className="flex flex-col gap-2">
                 <p className="text-xs text-gray-600 -mt-1">All actions are logged in the audit trail.</p>
-                <Button variant="outline" size="sm" loading={actionLoading} onClick={() => setShowResched(true)}>
-                  Reschedule inspection date
-                </Button>
-                {inspection.inspectionAttempts && inspection.inspectionAttempts.length > 0 && (
+                {canReschedule && (
+                  <Button variant="outline" size="sm" loading={actionLoading} onClick={() => setShowResched(true)}>
+                    Reschedule inspection date
+                  </Button>
+                )}
+                {canRevert && inspection.inspectionAttempts && inspection.inspectionAttempts.length > 0 && (
                   <Button variant="outline" size="sm" loading={actionLoading} onClick={handleRevertLast}>
                     Revert last attempt
                   </Button>
                 )}
-                {(inspection.status === 'passed' || inspection.status === 'failed') && (
+                {canReopen && (inspection.status === 'passed' || inspection.status === 'failed') && (
                   <Button variant="outline" size="sm" loading={actionLoading} onClick={handleReopen}>
                     Reopen inspection
                   </Button>

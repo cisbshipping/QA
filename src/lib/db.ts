@@ -416,6 +416,20 @@ export async function deleteSupplier(id: string): Promise<void> {
   await deleteDoc(doc(db, 'suppliers', id));
 }
 
+// Role permissions (editable by admin via /permissions page)
+export type PermissionConfig = Record<string, UserRole[]>;
+
+export async function getPermissionsConfig(): Promise<PermissionConfig | null> {
+  const snap = await getDoc(doc(db, 'settings', 'permissions'));
+  if (!snap.exists()) return null;
+  const d = snap.data() as { config?: PermissionConfig };
+  return d.config ?? null;
+}
+
+export async function savePermissionsConfig(config: PermissionConfig, savedBy: string): Promise<void> {
+  await setDoc(doc(db, 'settings', 'permissions'), { config, savedBy, savedAt: serverTimestamp() });
+}
+
 // Companies list (editable in Settings)
 export async function getCompaniesSetting(): Promise<string[] | null> {
   const snap = await getDoc(doc(db, 'settings', 'companies'));

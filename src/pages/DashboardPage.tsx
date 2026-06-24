@@ -6,8 +6,8 @@ import { type Complaint, type Inspection } from '@/types';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/Badge';
 import { fmtDate } from '@/lib/utils';
-import { FileText, ClipboardList, AlertCircle, CheckCircle2, Clock, TrendingUp, AlertTriangle } from 'lucide-react';
-import { differenceInDays, startOfMonth, subMonths, format, isSameMonth } from 'date-fns';
+import { FileText, ClipboardList, AlertCircle, CheckCircle2, Clock, TrendingUp, AlertTriangle, XCircle, CalendarCheck, Timer } from 'lucide-react';
+import { differenceInDays, differenceInBusinessDays, startOfMonth, subMonths, format, isSameMonth } from 'date-fns';
 
 interface StatCardProps {
   label: string;

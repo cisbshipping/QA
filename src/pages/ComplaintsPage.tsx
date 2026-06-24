@@ -4,6 +4,7 @@ import { getComplaintsPage, deleteComplaint, updateComplaint } from '@/lib/db';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { type Complaint, type ComplaintStatus } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
@@ -83,8 +84,11 @@ export function ComplaintsPage() {
     load();
   };
 
-  const canEdit = appUser?.role === 'admin' || appUser?.role === 'qa' || appUser?.role === 'manager';
-  const canDelete = appUser?.role === 'admin';
+  const { can } = usePermissions();
+  const canEdit = can('complaint.create');
+  const canDelete = can('complaint.delete');
+  const canBulkDelete = can('complaint.bulkDelete');
+  const canBulkClose = can('complaint.bulkClose');
 
   const bulkClose = async () => {
     if (!user || !appUser) return;
@@ -155,12 +159,12 @@ export function ComplaintsPage() {
             <X className="w-3 h-3" /> clear
           </button>
           <div className="ml-auto flex gap-2">
-            {canEdit && (
+            {canBulkClose && (
               <Button variant="outline" size="sm" loading={bulkLoading} onClick={bulkClose}>
                 <Lock className="w-4 h-4" /> Close all
               </Button>
             )}
-            {canDelete && (
+            {canBulkDelete && (
               <Button variant="danger" size="sm" loading={bulkLoading} onClick={bulkDelete}>
                 <Trash2 className="w-4 h-4" /> Delete all
               </Button>
