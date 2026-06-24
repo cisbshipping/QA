@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { AlertCircle, ChevronDown, ClipboardList, FileText, Loader2, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ChevronDown, ClipboardList, FileText, Loader2 } from 'lucide-react';
+import { Logo } from '@/components/ui/Logo';
 
 function MicrosoftLogo() {
   return (
@@ -45,8 +46,8 @@ export function LoginCard() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 py-8">
       <div className="bg-white w-full max-w-md rounded-2xl shadow-lg p-8">
         <div className="flex flex-col items-center gap-3 mb-8">
-          <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
-            <ShieldCheck className="w-6 h-6 text-white" />
+          <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-gray-700">
+            <Logo className="w-8 h-8" />
           </div>
           <div className="text-center">
             <h1 className="text-xl font-bold text-gray-900">QA Inspection System</h1>

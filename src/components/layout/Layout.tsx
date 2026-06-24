@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { MobileBottomNav } from './MobileBottomNav';
-import { Menu, ShieldCheck } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { format } from 'date-fns';
+import { Logo } from '@/components/ui/Logo';
 
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -19,8 +20,8 @@ export function Layout() {
             <Menu className="w-5 h-5 text-gray-700" />
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
-              <ShieldCheck className="w-4 h-4 text-white" />
+            <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center text-gray-700">
+              <Logo className="w-5 h-5" />
             </div>
             <p className="text-sm font-semibold text-gray-900">QA System</p>
           </div>

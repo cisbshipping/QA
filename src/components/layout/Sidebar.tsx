@@ -4,8 +4,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { ROLE_LABELS } from '@/types';
 import {
   LayoutDashboard, FileText, ClipboardList,
-  Settings, LogOut, ShieldCheck, Users, Inbox, Building2, X, FileSearch, Shield,
+  Settings, LogOut, Users, Inbox, Building2, X, FileSearch, Shield,
 } from 'lucide-react';
+import { Logo } from '@/components/ui/Logo';
 
 const mainItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -49,8 +50,8 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       )}>
         <div className="px-4 py-5 border-b border-gray-700 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-4 h-4 text-white" />
+            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0 text-gray-700">
+              <Logo className="w-5 h-5" />
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold leading-tight truncate">QA System</p>
