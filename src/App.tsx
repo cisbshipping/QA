@@ -13,6 +13,7 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { SuppliersPage } from '@/pages/SuppliersPage';
 import { AuditLogsPage } from '@/pages/AuditLogsPage';
 import { TrackSubmissionPage } from '@/pages/TrackSubmissionPage';
+import { PermissionsPage } from '@/pages/PermissionsPage';
 import { PublicComplaintPage } from '@/pages/PublicComplaintPage';
 import { PublicInspectionPage } from '@/pages/PublicInspectionPage';
 import { SubmitThankYouPage } from '@/pages/SubmitThankYouPage';
@@ -29,6 +30,7 @@ function ProtectedRoutes() {
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/suppliers" element={<SuppliersPage />} />
         <Route path="/audit" element={<AuditLogsPage />} />
+        <Route path="/permissions" element={<PermissionsPage />} />
         <Route path="/users" element={<UsersPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

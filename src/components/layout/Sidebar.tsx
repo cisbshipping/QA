@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { ROLE_LABELS } from '@/types';
 import {
   LayoutDashboard, FileText, ClipboardList,
-  Settings, LogOut, ShieldCheck, Users, Inbox, Building2, X, FileSearch,
+  Settings, LogOut, ShieldCheck, Users, Inbox, Building2, X, FileSearch, Shield,
 } from 'lucide-react';
 
 const navItems = [
@@ -12,6 +12,7 @@ const navItems = [
   { to: '/complaints', icon: FileText, label: 'Complaints' },
   { to: '/inspections', icon: ClipboardList, label: 'Inspections' },
   { to: '/suppliers', icon: Building2, label: 'Suppliers' },
+  { to: '/permissions', icon: Shield, label: 'Permissions' },
 ];
 
 const qaItems = [
