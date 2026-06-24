@@ -123,6 +123,15 @@ export interface Complaint {
   updatedAt: Date;
 }
 
+export interface InspectionAttempt {
+  attemptNo: number;
+  scheduledDate: string; // ISO
+  result: 'pass' | 'fail';
+  notes?: string;
+  recordedBy: string;
+  recordedAt: string; // ISO
+}
+
 export interface Inspection {
   id: string;
   picName: string;
@@ -167,6 +176,7 @@ export interface Inspection {
   inspectionResult?: 'pass' | 'fail';
   resultNotes?: string;
   rescheduledDate?: Date;
+  inspectionAttempts?: InspectionAttempt[];
   reviewNotes?: string;
   reviewedBy?: string;
   reviewedAt?: Date;

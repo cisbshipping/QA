@@ -95,17 +95,38 @@ export function InspectionDetailPage() {
     setActionLoading(true);
     setActionError('');
     try {
+      // Build an attempt record for the inspection that just happened.
+      const attempts = inspection.inspectionAttempts ?? [];
+      const newAttempt: import('@/types').InspectionAttempt = {
+        attemptNo: attempts.length + 1,
+        scheduledDate: (inspection.rescheduledDate ?? inspection.inspectionDate ?? new Date()).toISOString(),
+        result,
+        notes: resultNote || undefined,
+        recordedBy: appUser.name,
+        recordedAt: new Date().toISOString(),
+      };
+
+      // Pass → close. Fail + reschedule date → status 'rescheduled' so Pass/Fail can run again. Fail with no
+      // reschedule date → terminal 'failed'.
+      const failsWithReschedule = result === 'fail' && Boolean(reschedDate);
+      const newStatus: 'passed' | 'failed' | 'rescheduled' =
+        result === 'pass' ? 'passed' : failsWithReschedule ? 'rescheduled' : 'failed';
+
       const raw = {
-        status: (result === 'pass' ? 'passed' : 'failed') as 'passed' | 'failed',
+        status: newStatus,
         inspectionResult: result,
         resultNotes: resultNote,
-        rescheduledDate: result === 'fail' && reschedDate ? new Date(reschedDate) : undefined,
+        rescheduledDate: failsWithReschedule ? new Date(reschedDate) : undefined,
+        // When rescheduled, the new inspectionDate becomes the rescheduled date so the calendar/list reflects it.
+        inspectionDate: failsWithReschedule ? new Date(reschedDate) : inspection.inspectionDate,
         closedAt: result === 'pass' ? new Date() : undefined,
+        inspectionAttempts: [...attempts, newAttempt],
       };
       const payload = Object.fromEntries(
         Object.entries(raw).filter(([, v]) => v !== undefined && v !== '')
       ) as typeof raw;
-      await updateInspection(inspection.id, payload, user.uid, appUser.name, result === 'pass' ? 'passed' : 'failed');
+      await updateInspection(inspection.id, payload, user.uid, appUser.name,
+        result === 'pass' ? 'passed' : failsWithReschedule ? 'rescheduled' : 'failed');
       setShowResult(null);
       setResultNote('');
       setReschedDate('');
@@ -156,7 +177,7 @@ export function InspectionDetailPage() {
               </Button>
             </>
           )}
-          {canReview && inspection.status === 'accepted' && (
+          {canReview && (inspection.status === 'accepted' || inspection.status === 'rescheduled') && (
             <>
               <Button variant="danger" size="sm" onClick={() => setShowResult('fail')}>
                 <XCircle className="w-4 h-4" /> Fail
@@ -278,6 +299,32 @@ export function InspectionDetailPage() {
               </dl>
             </CardBody>
           </Card>
+
+          {/* Inspection attempts history */}
+          {inspection.inspectionAttempts && inspection.inspectionAttempts.length > 0 && (
+            <Card>
+              <CardHeader><h2 className="font-semibold text-gray-800">Inspection Attempts ({inspection.inspectionAttempts.length})</h2></CardHeader>
+              <CardBody>
+                <ul className="flex flex-col gap-3">
+                  {inspection.inspectionAttempts.map(a => (
+                    <li key={a.attemptNo} className={`border-l-4 pl-3 ${a.result === 'pass' ? 'border-green-300' : 'border-red-300'}`}>
+                      <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-gray-900">
+                          Attempt #{a.attemptNo}{' '}
+                          <span className={`ml-1 px-1.5 py-0.5 rounded text-xs font-semibold ${a.result === 'pass' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            {a.result.toUpperCase()}
+                          </span>
+                        </p>
+                        <p className="text-xs text-gray-500">{fmtDate(new Date(a.scheduledDate))}</p>
+                      </div>
+                      {a.notes && <p className="text-sm text-gray-700 whitespace-pre-wrap mt-1">{a.notes}</p>}
+                      <p className="text-xs text-gray-400 mt-1">Recorded by {a.recordedBy} on {fmtDateTime(new Date(a.recordedAt))}</p>
+                    </li>
+                  ))}
+                </ul>
+              </CardBody>
+            </Card>
+          )}
         </div>
       </div>
 
