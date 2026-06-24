@@ -101,10 +101,11 @@ export function InspectionDetailPage() {
         attemptNo: attempts.length + 1,
         scheduledDate: (inspection.rescheduledDate ?? inspection.inspectionDate ?? new Date()).toISOString(),
         result,
-        notes: resultNote || undefined,
         recordedBy: appUser.name,
         recordedAt: new Date().toISOString(),
       };
+      // Only include notes if non-empty — Firestore rejects undefined values, even nested in arrays.
+      if (resultNote.trim()) newAttempt.notes = resultNote.trim();
 
       // Pass → close. Fail + reschedule date → status 'rescheduled' so Pass/Fail can run again. Fail with no
       // reschedule date → terminal 'failed'.
@@ -144,6 +145,76 @@ export function InspectionDetailPage() {
 
   const canReview = appUser?.role === 'admin' || appUser?.role === 'qa' || appUser?.role === 'manager';
   const canEdit = canReview;
+  const isAdmin = appUser?.role === 'admin';
+
+  // ---- Admin override actions ----
+  const [showResched, setShowResched] = useState(false);
+  const [newScheduleDate, setNewScheduleDate] = useState('');
+
+  const handleAdminReschedule = async () => {
+    if (!inspection || !user || !appUser || !newScheduleDate) return;
+    setActionLoading(true);
+    setActionError('');
+    try {
+      const d = new Date(newScheduleDate);
+      await updateInspection(inspection.id,
+        { inspectionDate: d, rescheduledDate: d, status: 'rescheduled' },
+        user.uid, appUser.name, 'admin-rescheduled');
+      setShowResched(false);
+      setNewScheduleDate('');
+      load();
+    } catch (err) {
+      setActionError((err as Error).message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRevertLast = async () => {
+    if (!inspection || !user || !appUser) return;
+    if (!confirm('Revert the last inspection attempt? This removes the latest pass/fail and reopens the inspection.')) return;
+    setActionLoading(true);
+    setActionError('');
+    try {
+      const attempts = [...(inspection.inspectionAttempts ?? [])];
+      attempts.pop();
+      // If any attempts remain, keep status as rescheduled. Otherwise go back to accepted.
+      const nextStatus: 'accepted' | 'rescheduled' = attempts.length > 0 ? 'rescheduled' : 'accepted';
+      const payload: Partial<typeof inspection> = {
+        status: nextStatus,
+        inspectionAttempts: attempts,
+      };
+      // Clear closed timestamp if we're reopening
+      if (inspection.closedAt) payload.closedAt = undefined;
+      const cleaned = Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined && v !== ''));
+      await updateInspection(inspection.id, cleaned, user.uid, appUser.name, 'admin-reverted');
+      load();
+    } catch (err) {
+      setActionError((err as Error).message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReopen = async () => {
+    if (!inspection || !user || !appUser) return;
+    if (!confirm('Reopen this inspection? Status will go back to Accepted.')) return;
+    setActionLoading(true);
+    setActionError('');
+    try {
+      const payload = Object.fromEntries(Object.entries({
+        status: 'accepted' as const,
+        closedAt: undefined,
+        inspectionResult: undefined,
+      }).filter(([, v]) => v !== undefined));
+      await updateInspection(inspection.id, payload, user.uid, appUser.name, 'admin-reopened');
+      load();
+    } catch (err) {
+      setActionError((err as Error).message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-7 h-7 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>;
   if (!inspection) return <div className="p-6 text-gray-500">Inspection not found. <Link to="/inspections" className="text-blue-600 hover:underline">Go back</Link></div>;
@@ -300,6 +371,34 @@ export function InspectionDetailPage() {
             </CardBody>
           </Card>
 
+          {/* Admin Override panel — admin-only controls to reschedule or backtrack */}
+          {isAdmin && inspection.status !== 'pending' && inspection.status !== 'rejected' && (
+            <Card className="border-amber-200">
+              <CardHeader className="bg-amber-50 border-amber-200">
+                <h2 className="font-semibold text-amber-900 flex items-center gap-2">
+                  <Pencil className="w-4 h-4" /> Admin Override
+                </h2>
+              </CardHeader>
+              <CardBody className="flex flex-col gap-2">
+                <p className="text-xs text-gray-600 -mt-1">All actions are logged in the audit trail.</p>
+                <Button variant="outline" size="sm" loading={actionLoading} onClick={() => setShowResched(true)}>
+                  Reschedule inspection date
+                </Button>
+                {inspection.inspectionAttempts && inspection.inspectionAttempts.length > 0 && (
+                  <Button variant="outline" size="sm" loading={actionLoading} onClick={handleRevertLast}>
+                    Revert last attempt
+                  </Button>
+                )}
+                {(inspection.status === 'passed' || inspection.status === 'failed') && (
+                  <Button variant="outline" size="sm" loading={actionLoading} onClick={handleReopen}>
+                    Reopen inspection
+                  </Button>
+                )}
+                {actionError && <p className="text-xs text-red-600">{actionError}</p>}
+              </CardBody>
+            </Card>
+          )}
+
           {/* Inspection attempts history */}
           {inspection.inspectionAttempts && inspection.inspectionAttempts.length > 0 && (
             <Card>
@@ -351,6 +450,23 @@ export function InspectionDetailPage() {
               onClick={() => handleReview(showReview!)}
             >
               {showReview === 'accept' ? 'Confirm Accept' : 'Confirm Reject'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Admin Reschedule Modal */}
+      <Modal open={showResched} onClose={() => setShowResched(false)} title="Reschedule Inspection Date" size="md">
+        <div className="p-6 flex flex-col gap-4">
+          <p className="text-sm text-gray-600">
+            Pick the new inspection date. Status will be set to <span className="font-medium">Rescheduled</span> so Pass/Fail can be recorded on this date.
+          </p>
+          <Input label="New Inspection Date *" type="date" value={newScheduleDate} onChange={e => setNewScheduleDate(e.target.value)} />
+          {actionError && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{actionError}</div>}
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setShowResched(false)}>Cancel</Button>
+            <Button loading={actionLoading} onClick={handleAdminReschedule} disabled={!newScheduleDate}>
+              Update Date
             </Button>
           </div>
         </div>

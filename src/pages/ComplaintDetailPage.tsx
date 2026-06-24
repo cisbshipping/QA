@@ -154,6 +154,18 @@ export function ComplaintDetailPage() {
 
   const canReview = appUser?.role === 'admin' || appUser?.role === 'qa' || appUser?.role === 'manager';
   const canEdit = canReview;
+  const isAdmin = appUser?.role === 'admin';
+
+  const handleReopen = async () => {
+    if (!complaint || !user || !appUser) return;
+    if (!confirm('Reopen this complaint? Status will go back to Open.')) return;
+    const payload = Object.fromEntries(Object.entries({
+      status: 'open' as const,
+      closedAt: undefined,
+    }).filter(([, v]) => v !== undefined));
+    await updateComplaint(complaint.id, payload, user.uid, appUser.name, 'admin-reopened');
+    load();
+  };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-7 h-7 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>;
   if (!complaint) return <div className="p-6 text-gray-500">Complaint not found. <Link to="/complaints" className="text-blue-600 hover:underline">Go back</Link></div>;
@@ -193,6 +205,11 @@ export function ComplaintDetailPage() {
                 <CheckCircle className="w-4 h-4" /> Accept
               </Button>
             </>
+          )}
+          {isAdmin && (complaint.status === 'closed' || complaint.status === 'rejected') && (
+            <Button size="sm" variant="outline" onClick={handleReopen} title="Admin: reopen complaint">
+              <Pencil className="w-4 h-4" /> Reopen
+            </Button>
           )}
           {canReview && complaint.status === 'accepted' && (
             <Button size="sm" variant="secondary" onClick={handleClose}>
