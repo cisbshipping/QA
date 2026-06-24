@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { createPublicSubmission, generateSubmissionRef } from '@/lib/db';
-import { COMPLAINT_NATURES, type ComplaintNature, type SubmissionPhoto } from '@/types';
+import { createPublicSubmission, generateSubmissionRef, listSuppliers } from '@/lib/db';
+import { COMPLAINT_NATURES, type ComplaintNature, type SubmissionPhoto, type Supplier } from '@/types';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { PublicSubmitLayout } from './PublicSubmitLayout';
@@ -17,7 +17,6 @@ const schema = z.object({
   // Submitter
   submitterName: z.string().min(1, 'Required'),
   submitterEmail: z.string().email('Invalid email'),
-  submitterPhone: z.string().optional(),
   submitterCompany: z.string().min(1, 'Required'),
   // Product (all required)
   factorySupplier: z.string().min(1, 'Required'),
@@ -51,6 +50,15 @@ export function PublicComplaintPage() {
   const [previews, setPreviews] = useState<string[]>([]);
   const [progress, setProgress] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(true);
+
+  useEffect(() => {
+    listSuppliers()
+      .then(setSuppliers)
+      .catch(() => { /* fall back to no list */ })
+      .finally(() => setLoadingSuppliers(false));
+  }, []);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, control, watch, formState: { errors } } = useForm<FormData>({
@@ -124,7 +132,6 @@ export function PublicComplaintPage() {
         referenceNo: refNo,
         submitterName: data.submitterName,
         submitterEmail: data.submitterEmail,
-        submitterPhone: data.submitterPhone,
         submitterCompany: data.submitterCompany,
         factorySupplier: data.factorySupplier,
         brandName: data.brandName,
@@ -167,7 +174,6 @@ export function PublicComplaintPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Your Name *" error={errors.submitterName?.message} {...register('submitterName')} />
             <Input label="Email Address *" type="email" error={errors.submitterEmail?.message} {...register('submitterEmail')} />
-            <Input label="Phone (optional)" {...register('submitterPhone')} />
             <Input label="Consignee / Company *" error={errors.submitterCompany?.message} {...register('submitterCompany')} />
           </div>
         </fieldset>
@@ -176,7 +182,23 @@ export function PublicComplaintPage() {
         <fieldset className="border border-gray-200 rounded-lg p-4">
           <legend className="px-2 text-sm font-semibold text-gray-700">Complaint Information</legend>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input label="Factory / Supplier *" error={errors.factorySupplier?.message} {...register('factorySupplier')} />
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-gray-700">Factory / Supplier *</label>
+              <select
+                {...register('factorySupplier')}
+                disabled={loadingSuppliers}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">{loadingSuppliers ? 'Loading...' : 'Select supplier'}</option>
+                {suppliers.map(s => (
+                  <option key={s.id} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+              {errors.factorySupplier && <p className="text-xs text-red-600">{errors.factorySupplier.message as string}</p>}
+              {!loadingSuppliers && suppliers.length === 0 && (
+                <p className="text-xs text-gray-500">No suppliers configured. Please contact the QA team.</p>
+              )}
+            </div>
             <Input label="Brand Name *" error={errors.brandName?.message} {...register('brandName')} />
             <Input label="Product Name *" error={errors.productName?.message} {...register('productName')} className="sm:col-span-2" />
             <Input label="PI No. *" error={errors.piNo?.message} {...register('piNo')} />

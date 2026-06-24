@@ -237,8 +237,12 @@ export async function generateSubmissionRef(type: 'complaint' | 'inspection'): P
 
 export async function createPublicSubmission(data: Omit<PublicSubmission, 'id' | 'createdAt' | 'status'>): Promise<string> {
   // Use referenceNo as doc ID so public users can look it up by ref number without listing the whole collection.
+  // Strip undefined values — Firestore rejects them.
+  const clean = Object.fromEntries(
+    Object.entries(data).filter(([, v]) => v !== undefined && v !== '')
+  );
   await setDoc(doc(db, 'publicSubmissions', data.referenceNo), {
-    ...data,
+    ...clean,
     status: 'new',
     createdAt: serverTimestamp(),
   });

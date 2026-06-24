@@ -94,7 +94,9 @@ service cloud.firestore {
     }
 
     match /suppliers/{id} {
-      allow read: if isSignedIn();
+      // Public read allowed: supplier names are needed by the unauthenticated complaint form
+      // so submitters can pick the factory from a dropdown.
+      allow read: if true;
       allow create, update: if isEditor();
       allow delete: if isAdmin();
     }
