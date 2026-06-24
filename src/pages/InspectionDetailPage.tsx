@@ -47,6 +47,7 @@ export function InspectionDetailPage() {
   const [resultNote, setResultNote] = useState('');
   const [reschedDate, setReschedDate] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   const load = async () => {
     if (!id) return;
@@ -61,43 +62,63 @@ export function InspectionDetailPage() {
   const handleReview = async (action: 'accept' | 'reject') => {
     if (!inspection || !user || !appUser) return;
     setActionLoading(true);
-    await updateInspection(
-      inspection.id,
-      {
-        status: action === 'accept' ? 'accepted' : 'rejected',
+    setActionError('');
+    try {
+      const raw = {
+        status: (action === 'accept' ? 'accepted' : 'rejected') as 'accepted' | 'rejected',
         inspectionDate: action === 'accept' && inspectionDate ? new Date(inspectionDate) : undefined,
         reviewNotes: reviewNote,
         reviewedBy: appUser.name,
         reviewedAt: new Date(),
-      },
-      user.uid, appUser.name, action,
-    );
-    setShowReview(null);
-    setReviewNote('');
-    setInspectionDate('');
-    load();
-    setActionLoading(false);
+      };
+      const payload = Object.fromEntries(
+        Object.entries(raw).filter(([, v]) => v !== undefined && v !== '')
+      ) as typeof raw;
+      await updateInspection(inspection.id, payload, user.uid, appUser.name, action);
+      setShowReview(null);
+      setReviewNote('');
+      setInspectionDate('');
+      load();
+    } catch (err) {
+      const e = err as { code?: string; message?: string };
+      setActionError(e.code === 'permission-denied'
+        ? `Permission denied. Your role (${appUser.role}) cannot review inspections, or Firestore rules are outdated.`
+        : (e.message ?? 'Failed to update inspection.'));
+      console.error('Inspection review error:', err);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleResult = async (result: 'pass' | 'fail') => {
     if (!inspection || !user || !appUser) return;
     setActionLoading(true);
-    await updateInspection(
-      inspection.id,
-      {
-        status: result === 'pass' ? 'passed' : 'failed',
+    setActionError('');
+    try {
+      const raw = {
+        status: (result === 'pass' ? 'passed' : 'failed') as 'passed' | 'failed',
         inspectionResult: result,
         resultNotes: resultNote,
         rescheduledDate: result === 'fail' && reschedDate ? new Date(reschedDate) : undefined,
         closedAt: result === 'pass' ? new Date() : undefined,
-      },
-      user.uid, appUser.name, result === 'pass' ? 'passed' : 'failed',
-    );
-    setShowResult(null);
-    setResultNote('');
-    setReschedDate('');
-    load();
-    setActionLoading(false);
+      };
+      const payload = Object.fromEntries(
+        Object.entries(raw).filter(([, v]) => v !== undefined && v !== '')
+      ) as typeof raw;
+      await updateInspection(inspection.id, payload, user.uid, appUser.name, result === 'pass' ? 'passed' : 'failed');
+      setShowResult(null);
+      setResultNote('');
+      setReschedDate('');
+      load();
+    } catch (err) {
+      const e = err as { code?: string; message?: string };
+      setActionError(e.code === 'permission-denied'
+        ? `Permission denied. Your role (${appUser.role}) cannot record inspection results, or Firestore rules are outdated.`
+        : (e.message ?? 'Failed to update inspection.'));
+      console.error('Inspection result error:', err);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const canReview = appUser?.role === 'admin' || appUser?.role === 'qa' || appUser?.role === 'manager';
@@ -272,6 +293,9 @@ export function InspectionDetailPage() {
             <Input label="Scheduled Inspection Date" type="date" value={inspectionDate} onChange={e => setInspectionDate(e.target.value)} />
           )}
           <Textarea label="Notes (optional)" value={reviewNote} onChange={e => setReviewNote(e.target.value)} rows={4} />
+          {actionError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{actionError}</div>
+          )}
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setShowReview(null)}>Cancel</Button>
             <Button
@@ -292,6 +316,9 @@ export function InspectionDetailPage() {
             <Input label="Rescheduled Inspection Date" type="date" value={reschedDate} onChange={e => setReschedDate(e.target.value)} />
           )}
           <Textarea label="Result Notes" value={resultNote} onChange={e => setResultNote(e.target.value)} rows={4} />
+          {actionError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{actionError}</div>
+          )}
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setShowResult(null)}>Cancel</Button>
             <Button
