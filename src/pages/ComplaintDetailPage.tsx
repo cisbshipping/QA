@@ -175,18 +175,20 @@ export function ComplaintDetailPage() {
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100">
-          <ArrowLeft className="w-5 h-5 text-gray-600" />
-        </button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-gray-900 font-mono">{complaint.complaintNo}</h1>
-            <StatusBadge status={complaint.status} />
+      <div className="flex flex-col lg:flex-row lg:items-center gap-3 mb-6">
+        <div className="flex items-start gap-2 flex-1 min-w-0">
+          <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-lg hover:bg-gray-100 shrink-0">
+            <ArrowLeft className="w-5 h-5 text-gray-600" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold text-gray-900 font-mono break-all">{complaint.complaintNo}</h1>
+              <StatusBadge status={complaint.status} />
+            </div>
+            <p className="text-sm text-gray-500 mt-0.5">Recorded by {complaint.recordedBy} on {fmtDate(complaint.dateRecorded)}</p>
           </div>
-          <p className="text-sm text-gray-500 mt-0.5">Recorded by {complaint.recordedBy} on {fmtDate(complaint.dateRecorded)}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" loading={previewing} onClick={handlePreview}>
             <Eye className="w-4 h-4" /> Preview PDF
           </Button>

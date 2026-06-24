@@ -50,12 +50,12 @@ export function UsersPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Users</h1>
           <p className="text-gray-500 mt-0.5">{users.length} active · {pendingInvites.length} pending</p>
         </div>
-        <Button onClick={() => setShowInvite(true)}>
+        <Button onClick={() => setShowInvite(true)} className="self-start sm:self-auto">
           <Plus className="w-4 h-4" /> Invite User
         </Button>
       </div>
@@ -73,7 +73,33 @@ export function UsersPage() {
           ) : users.length === 0 ? (
             <div className="py-8 text-center text-sm text-gray-500">No active users yet.</div>
           ) : (
-            <table className="w-full text-sm">
+            <>
+            {/* Mobile: card list */}
+            <ul className="sm:hidden divide-y divide-gray-100">
+              {users.map(u => (
+                <li key={u.uid} className="px-4 py-3 flex flex-col gap-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium text-gray-900 truncate">{u.name}</p>
+                    {u.uid === me?.uid ? (
+                      <span className="px-2.5 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full shrink-0">{ROLE_LABELS[u.role]}</span>
+                    ) : (
+                      <select
+                        value={u.role}
+                        onChange={e => handleRoleChange(u.uid, e.target.value as UserRole)}
+                        className="text-xs border border-gray-300 rounded px-2 py-1 shrink-0 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+                      </select>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-600 truncate">{u.email}</p>
+                  <p className="text-xs text-gray-400">Joined {fmtDate(u.createdAt)}</p>
+                </li>
+              ))}
+            </ul>
+
+            {/* Desktop: table */}
+            <table className="hidden sm:table w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
@@ -105,6 +131,7 @@ export function UsersPage() {
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </Card>
 
@@ -117,7 +144,28 @@ export function UsersPage() {
           {pendingInvites.length === 0 ? (
             <div className="py-8 text-center text-sm text-gray-500">No pending invites.</div>
           ) : (
-            <table className="w-full text-sm">
+            <>
+            {/* Mobile: card list */}
+            <ul className="sm:hidden divide-y divide-gray-100">
+              {pendingInvites.map(i => (
+                <li key={i.email} className="px-4 py-3 flex flex-col gap-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium text-gray-900 truncate">{i.email}</p>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">{ROLE_LABELS[i.role]}</span>
+                      <button onClick={() => handleDeleteInvite(i.email)} className="p-1.5 rounded hover:bg-red-50 text-red-500" title="Revoke invite">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-600 truncate">{i.name || '—'}</p>
+                  <p className="text-xs text-gray-400">Invited {fmtDate(i.invitedAt)}</p>
+                </li>
+              ))}
+            </ul>
+
+            {/* Desktop: table */}
+            <table className="hidden sm:table w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Email</th>
@@ -145,6 +193,7 @@ export function UsersPage() {
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </Card>
       </div>
