@@ -7,19 +7,22 @@ import {
   Settings, LogOut, ShieldCheck, Users, Inbox, Building2, X, FileSearch, Shield,
 } from 'lucide-react';
 
-const navItems = [
+const mainItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/complaints', icon: FileText, label: 'Complaints' },
-  { to: '/inspections', icon: ClipboardList, label: 'Inspections' },
-  { to: '/suppliers', icon: Building2, label: 'Suppliers' },
-  { to: '/permissions', icon: Shield, label: 'Permissions' },
 ];
 
 const qaItems = [
-  { to: '/inbox', icon: Inbox, label: 'Inbox' },
+  { to: '/complaints', icon: FileText, label: 'Complaints', everyone: true },
+  { to: '/inspections', icon: ClipboardList, label: 'Inspections', everyone: true },
+  { to: '/inbox', icon: Inbox, label: 'Inbox', everyone: false },
+];
+
+const dataItems = [
+  { to: '/suppliers', icon: Building2, label: 'Suppliers' },
 ];
 
 const adminItems = [
+  { to: '/permissions', icon: Shield, label: 'Permissions' },
   { to: '/audit', icon: FileSearch, label: 'Audit Logs' },
   { to: '/users', icon: Users, label: 'Users' },
   { to: '/settings', icon: Settings, label: 'Settings' },
@@ -60,8 +63,9 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         </div>
 
         <nav className="flex-1 px-3 py-4 overflow-y-auto">
+          {/* Main */}
           <div className="flex flex-col gap-0.5">
-            {navItems.map(({ to, icon: Icon, label }) => (
+            {mainItems.map(({ to, icon: Icon, label }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -78,11 +82,13 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
             ))}
           </div>
 
-          {(appUser?.role === 'admin' || appUser?.role === 'qa' || appUser?.role === 'manager') && (
-            <div className="mt-6">
-              <p className="px-3 mb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">QA</p>
-              <div className="flex flex-col gap-0.5">
-                {qaItems.map(({ to, icon: Icon, label }) => (
+          {/* QA — Complaints + Inspections always visible; Inbox only for QA roles */}
+          <div className="mt-6">
+            <p className="px-3 mb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">QA</p>
+            <div className="flex flex-col gap-0.5">
+              {qaItems
+                .filter(item => item.everyone || appUser?.role === 'admin' || appUser?.role === 'qa' || appUser?.role === 'manager')
+                .map(({ to, icon: Icon, label }) => (
                   <NavLink
                     key={to}
                     to={to}
@@ -96,11 +102,32 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                     {label}
                   </NavLink>
                 ))}
-              </div>
             </div>
-          )}
+          </div>
 
-          {(appUser?.role === 'admin') && (
+          {/* Data */}
+          <div className="mt-6">
+            <p className="px-3 mb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">Data</p>
+            <div className="flex flex-col gap-0.5">
+              {dataItems.map(({ to, icon: Icon, label }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  onClick={onClose}
+                  className={({ isActive }) => cn(
+                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                    isActive ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                  )}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+
+          {/* Admin */}
+          {appUser?.role === 'admin' && (
             <div className="mt-6">
               <p className="px-3 mb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">Admin</p>
               <div className="flex flex-col gap-0.5">
