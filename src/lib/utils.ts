@@ -29,3 +29,23 @@ export const STATUS_COLORS: Record<string, string> = {
 export function statusLabel(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
+
+/**
+ * Given a SharePoint/OneDrive file webUrl returned by Microsoft Graph,
+ * derive the URL of its parent folder (the path one level up).
+ * SharePoint will redirect that path to the folder view in the browser.
+ */
+export function getSharePointFolderUrl(fileUrl: string | undefined): string | undefined {
+  if (!fileUrl) return undefined;
+  try {
+    const url = new URL(fileUrl);
+    url.search = ''; // strip ?web=1 etc.
+    url.hash = '';
+    const lastSlash = url.pathname.lastIndexOf('/');
+    if (lastSlash <= 0) return undefined;
+    url.pathname = url.pathname.substring(0, lastSlash);
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}

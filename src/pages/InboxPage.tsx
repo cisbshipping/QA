@@ -6,7 +6,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Input';
-import { fmtDate, fmtDateTime } from '@/lib/utils';
+import { fmtDate, fmtDateTime, getSharePointFolderUrl } from '@/lib/utils';
 import { Inbox, FileText, ClipboardList, Check, X, Mail, Phone, ExternalLink } from 'lucide-react';
 
 const STATUS_FILTERS: { value: '' | PublicSubmissionStatus; label: string }[] = [
@@ -196,6 +196,16 @@ export function InboxPage() {
               {selected.photos && selected.photos.length > 0 && (
                 <fieldset className="border border-gray-200 rounded-lg p-4">
                   <legend className="px-2 text-sm font-semibold text-gray-700">Photos ({selected.photos.length})</legend>
+                  {getSharePointFolderUrl(selected.photos[0].downloadUrl) && (
+                    <a
+                      href={getSharePointFolderUrl(selected.photos[0].downloadUrl)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline mb-2"
+                    >
+                      <ExternalLink className="w-4 h-4" /> Open folder in SharePoint
+                    </a>
+                  )}
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                     {selected.photos.map((p, i) => (
                       <a key={i} href={p.downloadUrl} target="_blank" rel="noopener noreferrer"

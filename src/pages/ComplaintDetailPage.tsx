@@ -10,8 +10,8 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { ComplaintForm } from '@/components/forms/ComplaintForm';
 import { Textarea, Input } from '@/components/ui/Input';
-import { fmtDate, fmtDateTime } from '@/lib/utils';
-import { ArrowLeft, Pencil, CheckCircle, XCircle, Lock, Download, Eye, Send, Mail, MessageSquare, Plus } from 'lucide-react';
+import { fmtDate, fmtDateTime, getSharePointFolderUrl } from '@/lib/utils';
+import { ArrowLeft, Pencil, CheckCircle, XCircle, Lock, Download, Eye, Send, Mail, MessageSquare, Plus, ExternalLink } from 'lucide-react';
 
 function DetailRow({ label, value }: { label: string; value?: string | null | boolean }) {
   if (value === undefined || value === null || value === '') return null;
@@ -272,6 +272,47 @@ export function ComplaintDetailPage() {
               </div>
             </CardBody>
           </Card>
+
+          {/* Defective sample photos */}
+          {complaint.photos && complaint.photos.length > 0 && (
+            <Card>
+              <CardHeader className="flex items-center justify-between flex-wrap gap-2">
+                <h2 className="font-semibold text-gray-800">Defective Sample Photos ({complaint.photos.length})</h2>
+                {getSharePointFolderUrl(complaint.photos[0].downloadUrl) && (
+                  <a
+                    href={getSharePointFolderUrl(complaint.photos[0].downloadUrl)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                  >
+                    <ExternalLink className="w-4 h-4" /> Open folder in SharePoint
+                  </a>
+                )}
+              </CardHeader>
+              <CardBody>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {complaint.photos.map((p, i) => (
+                    <a
+                      key={i}
+                      href={p.downloadUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="relative group rounded-lg overflow-hidden border border-gray-200 bg-gray-50 aspect-square block"
+                      title={p.name}
+                    >
+                      <img src={p.downloadUrl} alt={p.name} className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <ExternalLink className="w-5 h-5 text-white" />
+                      </div>
+                    </a>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-3">
+                  Photos stored in shared OneDrive / SharePoint. Click a thumbnail to open the file, or use the link above to open the whole folder.
+                </p>
+              </CardBody>
+            </Card>
+          )}
         </div>
 
         {/* Side panel */}
