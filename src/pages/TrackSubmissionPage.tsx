@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { getSubmissionByRef, findSubmissionsByPiNo } from '@/lib/db';
-import type { PublicSubmission } from '@/types';
+import { useEffect, useState } from 'react';
+import { getSubmissionByRef, findSubmissionsByPiNo, getInspection, getComplaint } from '@/lib/db';
+import type { PublicSubmission, Inspection, Complaint } from '@/types';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { PublicSubmitLayout } from './PublicSubmitLayout';
@@ -162,19 +162,64 @@ function StatusCard({ submission: s }: { submission: PublicSubmission }) {
 }
 
 function DetailsCard({ submission: s }: { submission: PublicSubmission }) {
+  const [linked, setLinked] = useState<Inspection | Complaint | null>(null);
+
+  useEffect(() => {
+    // Fetch the matching record in the main collection so we can show fields QA has populated since
+    // (e.g. inspectionDate after the request was accepted).
+    if (s.type === 'inspection') {
+      getInspection(s.referenceNo).then(r => setLinked(r)).catch(() => {});
+    } else if (s.type === 'complaint') {
+      getComplaint(s.referenceNo).then(r => setLinked(r)).catch(() => {});
+    }
+  }, [s.referenceNo, s.type]);
+
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm flex flex-col gap-2">
+    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm flex flex-col gap-3">
       <div className="flex items-baseline justify-between">
         <p className="font-mono font-semibold text-blue-700">{s.referenceNo}</p>
         <span className="text-xs text-gray-500 capitalize">{s.type}</span>
       </div>
-      <p className="text-gray-700">{s.submitterName}</p>
-      {s.type === 'inspection' && s.customerPiNo && (
-        <p className="text-xs text-gray-600">PI No. {s.customerPiNo} · {s.factoryLocation} · {fmtDate(s.factoryCommitDate)}</p>
+      <p className="text-gray-700">Submitted by {s.submitterName}</p>
+
+      {s.type === 'inspection' && (
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-xs">
+          <Field label="PI No." value={s.customerPiNo} />
+          <Field label="PO No." value={s.poNo} />
+          <Field label="Supplier / Factory" value={s.factoryLocation} />
+          <Field label="Customer" value={s.customer} />
+          <Field label="Ready Date" value={fmtDate(s.factoryCommitDate)} />
+          <Field
+            label="Inspection Date"
+            value={
+              linked && 'rescheduledDate' in linked
+                ? fmtDate(linked.rescheduledDate ?? linked.inspectionDate)
+                : (s.factoryCommitDate ? '— pending QA review —' : '—')
+            }
+          />
+          {linked && 'status' in linked && linked.status && (
+            <Field label="Inspection Status" value={String(linked.status).toUpperCase()} />
+          )}
+        </dl>
       )}
-      {s.type === 'complaint' && s.factorySupplier && (
-        <p className="text-xs text-gray-600">Factory: {s.factorySupplier} · PI {s.piNo}</p>
+
+      {s.type === 'complaint' && (
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-xs">
+          <Field label="Factory / Supplier" value={s.factorySupplier} />
+          <Field label="PI No." value={s.piNo} />
+          <Field label="PO No." value={s.poNo} />
+          <Field label="Product" value={s.productName} />
+        </dl>
       )}
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="flex flex-col">
+      <dt className="text-gray-500 uppercase tracking-wide text-[10px] font-semibold">{label}</dt>
+      <dd className="text-gray-900 text-sm">{value || '—'}</dd>
     </div>
   );
 }

@@ -43,7 +43,9 @@ service cloud.firestore {
     }
 
     match /complaints/{id} {
-      allow read: if isSignedIn();
+      // Public get by exact doc ID = refNo (used by /track). Listing still requires sign-in.
+      allow get: if true;
+      allow list: if isSignedIn();
       // Internal users: full create. Public: only if source=public, status=open, submitterEmail present.
       allow create: if isEditor() || (
         request.resource.data.source == 'public'
@@ -57,7 +59,8 @@ service cloud.firestore {
     }
 
     match /inspections/{id} {
-      allow read: if isSignedIn();
+      allow get: if true;
+      allow list: if isSignedIn();
       allow create: if isEditor() || (
         request.resource.data.source == 'public'
         && request.resource.data.status == 'pending'
