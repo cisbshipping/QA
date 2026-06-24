@@ -14,3 +14,27 @@ body {
   width: 100%;
   min-height: 100vh;
 }
+
+/* Print: hide chrome, give content full width, clean background */
+@media print {
+  aside,
+  header,
+  nav,
+  button,
+  .print-hide {
+    display: none !important;
+  }
+  body, html, #root, main {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .max-w-7xl, .max-w-6xl, .max-w-5xl, .max-w-4xl, .max-w-2xl {
+    max-width: 100% !important;
+  }
+  a { color: inherit !important; text-decoration: none !important; }
+  .shadow, .shadow-sm, .shadow-md, .shadow-lg { box-shadow: none !important; }
+  .rounded-xl, .rounded-2xl, .rounded-lg { border-radius: 4px !important; }
+  /* Avoid breaking content across pages mid-section */
+  fieldset, dl, table { break-inside: avoid; }
+}

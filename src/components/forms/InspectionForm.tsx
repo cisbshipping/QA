@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
-import { createInspection, updateInspection } from '@/lib/db';
-import { YL_COMPANIES, INSPECTION_FOCUS_AREAS, type Inspection, type YLCompany, type AqlLevel, type InspectorType } from '@/types';
+import { createInspection, updateInspection, listSuppliers } from '@/lib/db';
+import { INSPECTION_FOCUS_AREAS, type Inspection, type YLCompany, type AqlLevel, type InspectorType, type Supplier } from '@/types';
+import { useCompanies } from '@/hooks/useCompanies';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Input';
 import { CardBody, CardFooter } from '@/components/ui/Card';
@@ -16,7 +18,7 @@ const schema = z.object({
   customerCountry: z.string().optional(),
   customerPiNo: z.string().min(1, 'Required'),
   supplierPoNo: z.string().min(1, 'Required'),
-  factory: z.string().min(1, 'Required'),
+  factoryId: z.string().min(1, 'Pick a supplier'),
   factoryCommitDate: z.string().min(1, 'Required'),
   totalQtyCartons: z.string().min(1, 'Required'),
   product: z.string().min(1, 'Required'),
@@ -64,6 +66,15 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
   const { user, appUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(true);
+  const companies = useCompanies();
+
+  useEffect(() => {
+    listSuppliers()
+      .then(setSuppliers)
+      .finally(() => setLoadingSuppliers(false));
+  }, []);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, control, watch, formState: { errors } } = useForm<FormData>({
@@ -76,7 +87,7 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
           customerCountry: existing.customerCountry ?? '',
           customerPiNo: existing.customerPiNo,
           supplierPoNo: existing.supplierPoNo,
-          factory: existing.factory,
+          factoryId: existing.factoryId ?? '',
           factoryCommitDate: existing.factoryCommitDate.toISOString().slice(0, 10),
           totalQtyCartons: String(existing.totalQtyCartons),
           product: existing.product,
@@ -133,7 +144,8 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
         customerCountry: data.customerCountry,
         customerPiNo: data.customerPiNo,
         supplierPoNo: data.supplierPoNo,
-        factory: data.factory,
+        factory: suppliers.find(s => s.id === data.factoryId)?.name ?? existing?.factory ?? '',
+        factoryId: data.factoryId,
         factoryCommitDate: new Date(data.factoryCommitDate),
         totalQtyCartons: Number(data.totalQtyCartons),
         product: data.product,
@@ -182,10 +194,13 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
 
   return (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    <form onSubmit={handleSubmit(onSubmit as any)}>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    <form onSubmit={handleSubmit(onSubmit as any, () => {
+      setTimeout(() => document.querySelector('[data-form-error-summary]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+    })}>
       <CardBody className="flex flex-col gap-6">
         {/* Header */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input label="PIC Name" value={appUser?.name ?? ''} disabled />
           <Input label="Department" error={errors.department?.message} {...register('department')} />
         </div>
@@ -193,7 +208,7 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
         {/* Company & customer */}
         <fieldset className="border border-gray-200 rounded-lg p-4">
           <legend className="px-2 text-sm font-semibold text-gray-700">Order Information</legend>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Controller
               control={control}
               name="company"
@@ -201,7 +216,7 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
                 <Select
                   label="Company *"
                   error={errors.company?.message}
-                  options={YL_COMPANIES.map(c => ({ value: c, label: c }))}
+                  options={companies.map(c => ({ value: c, label: c }))}
                   placeholder="Select company"
                   {...field}
                 />
@@ -213,7 +228,25 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
             </div>
             <Input label="Customer PI No. *" error={errors.customerPiNo?.message} {...register('customerPiNo')} />
             <Input label="Supplier PO No. *" error={errors.supplierPoNo?.message} {...register('supplierPoNo')} />
-            <Input label="Factory / Location *" error={errors.factory?.message} {...register('factory')} />
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-gray-700">Factory / Supplier *</label>
+              <select
+                {...register('factoryId')}
+                disabled={loadingSuppliers}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">{loadingSuppliers ? 'Loading...' : 'Select supplier'}</option>
+                {suppliers.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}{s.email ? ` (${s.email})` : ''}</option>
+                ))}
+              </select>
+              {errors.factoryId && <p className="text-xs text-red-600">{errors.factoryId.message as string}</p>}
+              {!loadingSuppliers && suppliers.length === 0 && (
+                <p className="text-xs text-gray-500">
+                  No suppliers yet. <Link to="/suppliers" className="text-blue-600 hover:underline">Add a supplier first</Link>.
+                </p>
+              )}
+            </div>
             <Input label="Factory Commit Date *" type="date" error={errors.factoryCommitDate?.message} {...register('factoryCommitDate')} hint="Request inspection 2–4 weeks before commit date" />
             <Input label="Total Quantity (Cartons) *" type="number" error={errors.totalQtyCartons?.message} {...register('totalQtyCartons')} />
             <Input label="Container Size" {...register('containerSize')} placeholder="e.g. 40HC" />
@@ -344,14 +377,14 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
         {/* Approval signatures */}
         <fieldset className="border border-gray-200 rounded-lg p-4">
           <legend className="px-2 text-sm font-semibold text-gray-700">Approvals</legend>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Requested By *" error={errors.requestedByName?.message} {...register('requestedByName')} />
             <Input label="Date *" type="date" error={errors.requestedByDate?.message} {...register('requestedByDate')} />
             <Input label="Reviewed By (HOD) *" error={errors.hodName?.message} {...register('hodName')} />
           </div>
         </fieldset>
         {Object.keys(errors).length > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+          <div data-form-error-summary className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
             <p className="font-semibold mb-1">Please fix the following before submitting:</p>
             <ul className="list-disc list-inside text-xs flex flex-col gap-0.5">
               {Object.entries(errors).map(([key, err]) => (

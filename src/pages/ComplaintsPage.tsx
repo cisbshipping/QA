@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { getComplaints, deleteComplaint } from '@/lib/db';
+import { getComplaintsPage, deleteComplaint, updateComplaint } from '@/lib/db';
+import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { type Complaint, type ComplaintStatus } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { Card } from '@/components/ui/Card';
@@ -9,7 +10,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { ComplaintForm } from '@/components/forms/ComplaintForm';
 import { fmtDate } from '@/lib/utils';
-import { Plus, Search, Trash2, Eye, Pencil } from 'lucide-react';
+import { Plus, Search, Trash2, Eye, Pencil, Lock, X } from 'lucide-react';
 
 const STATUS_FILTERS: { value: '' | ComplaintStatus; label: string }[] = [
   { value: '', label: 'All' },
@@ -23,18 +24,47 @@ export function ComplaintsPage() {
   const { user, appUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [cursor, setCursor] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Complaint | undefined>();
   const [search, setSearch] = useState('');
   const statusFilter = (searchParams.get('status') ?? '') as '' | ComplaintStatus;
+  const PAGE_SIZE = 50;
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  };
+
+  const toggleAll = (ids: string[]) => {
+    if (ids.every(id => selected.has(id))) setSelected(new Set());
+    else setSelected(new Set(ids));
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
-    const data = await getComplaints();
-    setComplaints(data);
+    const res = await getComplaintsPage(PAGE_SIZE);
+    setComplaints(res.items);
+    setCursor(res.cursor);
+    setHasMore(res.hasMore);
     setLoading(false);
   }, []);
+
+  const loadMore = async () => {
+    if (!cursor || loadingMore) return;
+    setLoadingMore(true);
+    const res = await getComplaintsPage(PAGE_SIZE, cursor);
+    setComplaints(prev => [...prev, ...res.items]);
+    setCursor(res.cursor);
+    setHasMore(res.hasMore);
+    setLoadingMore(false);
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -56,8 +86,32 @@ export function ComplaintsPage() {
   const canEdit = appUser?.role === 'admin' || appUser?.role === 'qa' || appUser?.role === 'manager';
   const canDelete = appUser?.role === 'admin';
 
+  const bulkClose = async () => {
+    if (!user || !appUser) return;
+    if (!confirm(`Mark ${selected.size} complaint(s) as closed?`)) return;
+    setBulkLoading(true);
+    for (const id of selected) {
+      await updateComplaint(id, { status: 'closed', closedAt: new Date() }, user.uid, appUser.name, 'closed');
+    }
+    setSelected(new Set());
+    setBulkLoading(false);
+    load();
+  };
+
+  const bulkDelete = async () => {
+    if (!user || !appUser) return;
+    if (!confirm(`PERMANENTLY DELETE ${selected.size} complaint(s)? This cannot be undone.`)) return;
+    setBulkLoading(true);
+    for (const id of selected) {
+      await deleteComplaint(id, user.uid, appUser.name);
+    }
+    setSelected(new Set());
+    setBulkLoading(false);
+    load();
+  };
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Complaints</h1>
@@ -93,6 +147,28 @@ export function ComplaintsPage() {
         </div>
       </div>
 
+      {/* Bulk actions */}
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-sm">
+          <span className="text-blue-900 font-medium">{selected.size} selected</span>
+          <button onClick={() => setSelected(new Set())} className="text-xs text-blue-700 hover:underline flex items-center gap-1">
+            <X className="w-3 h-3" /> clear
+          </button>
+          <div className="ml-auto flex gap-2">
+            {canEdit && (
+              <Button variant="outline" size="sm" loading={bulkLoading} onClick={bulkClose}>
+                <Lock className="w-4 h-4" /> Close all
+              </Button>
+            )}
+            {canDelete && (
+              <Button variant="danger" size="sm" loading={bulkLoading} onClick={bulkDelete}>
+                <Trash2 className="w-4 h-4" /> Delete all
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       <Card>
         {loading ? (
           <div className="flex items-center justify-center h-40">
@@ -108,6 +184,17 @@ export function ComplaintsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
+                  {canEdit && (
+                    <th className="w-10 px-3">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 rounded text-blue-600"
+                        checked={filtered.length > 0 && filtered.every(c => selected.has(c.id))}
+                        onChange={() => toggleAll(filtered.map(c => c.id))}
+                        aria-label="Select all"
+                      />
+                    </th>
+                  )}
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Complaint No.</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Consignee</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">PI No.</th>
@@ -120,6 +207,17 @@ export function ComplaintsPage() {
               <tbody className="divide-y divide-gray-100">
                 {filtered.map(c => (
                   <tr key={c.id} className="hover:bg-gray-50">
+                    {canEdit && (
+                      <td className="px-3">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded text-blue-600"
+                          checked={selected.has(c.id)}
+                          onChange={() => toggle(c.id)}
+                          aria-label={`Select ${c.complaintNo}`}
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-3 font-mono text-blue-700 font-medium">{c.complaintNo}</td>
                     <td className="px-4 py-3 text-gray-900">{c.consignee}</td>
                     <td className="px-4 py-3 text-gray-600">{c.piNo}</td>
@@ -150,6 +248,15 @@ export function ComplaintsPage() {
           </div>
         )}
       </Card>
+
+      {hasMore && (
+        <div className="flex justify-center mt-4">
+          <Button variant="outline" loading={loadingMore} onClick={loadMore}>
+            Load more
+          </Button>
+        </div>
+      )}
+
 
       <Modal open={showForm} onClose={() => setShowForm(false)} title={editing ? 'Edit Complaint' : 'New Complaint'} size="2xl">
         <ComplaintForm

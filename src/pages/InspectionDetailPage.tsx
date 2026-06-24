@@ -100,14 +100,14 @@ export function InspectionDetailPage() {
     setActionLoading(false);
   };
 
-  const canReview = appUser?.role === 'admin' || appUser?.role === 'qa';
-  const canEdit = appUser?.role === 'admin' || appUser?.role === 'qa' || appUser?.role === 'manager';
+  const canReview = appUser?.role === 'admin' || appUser?.role === 'qa' || appUser?.role === 'manager';
+  const canEdit = canReview;
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-7 h-7 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>;
   if (!inspection) return <div className="p-6 text-gray-500">Inspection not found. <Link to="/inspections" className="text-blue-600 hover:underline">Go back</Link></div>;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100">
           <ArrowLeft className="w-5 h-5 text-gray-600" />
@@ -154,7 +154,7 @@ export function InspectionDetailPage() {
           <Card>
             <CardHeader><h2 className="font-semibold text-gray-800">Order Information</h2></CardHeader>
             <CardBody>
-              <dl className="grid grid-cols-2 gap-4">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <DetailRow label="Company" value={inspection.company} />
                 <DetailRow label="Customer" value={inspection.customer} />
                 <DetailRow label="Customer Country" value={inspection.customerCountry} />
@@ -172,7 +172,7 @@ export function InspectionDetailPage() {
           <Card>
             <CardHeader><h2 className="font-semibold text-gray-800">Product Description</h2></CardHeader>
             <CardBody>
-              <dl className="grid grid-cols-2 gap-4">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <DetailRow label="Product" value={inspection.product} />
                 <DetailRow label="Standard" value={inspection.productStandard} />
                 <DetailRow label="Grade" value={inspection.productGrade} />
@@ -196,7 +196,7 @@ export function InspectionDetailPage() {
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Reason for Request</p>
                 <p className="text-sm text-gray-900">{inspection.reasonForRequest}</p>
               </div>
-              <dl className="grid grid-cols-2 gap-4">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Focus Areas</dt>
                   <dd className="flex flex-wrap gap-1">

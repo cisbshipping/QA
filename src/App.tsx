@@ -10,6 +10,9 @@ import { InspectionDetailPage } from '@/pages/InspectionDetailPage';
 import { UsersPage } from '@/pages/UsersPage';
 import { InboxPage } from '@/pages/InboxPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { SuppliersPage } from '@/pages/SuppliersPage';
+import { AuditLogsPage } from '@/pages/AuditLogsPage';
+import { TrackSubmissionPage } from '@/pages/TrackSubmissionPage';
 import { PublicComplaintPage } from '@/pages/PublicComplaintPage';
 import { PublicInspectionPage } from '@/pages/PublicInspectionPage';
 import { SubmitThankYouPage } from '@/pages/SubmitThankYouPage';
@@ -24,6 +27,8 @@ function ProtectedRoutes() {
         <Route path="/inspections" element={<InspectionsPage />} />
         <Route path="/inspections/:id" element={<InspectionDetailPage />} />
         <Route path="/inbox" element={<InboxPage />} />
+        <Route path="/suppliers" element={<SuppliersPage />} />
+        <Route path="/audit" element={<AuditLogsPage />} />
         <Route path="/users" element={<UsersPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -52,6 +57,7 @@ function AppRoutes() {
       <Route path="/submit/complaint" element={<PublicComplaintPage />} />
       <Route path="/submit/inspection" element={<PublicInspectionPage />} />
       <Route path="/submit/thank-you" element={<SubmitThankYouPage />} />
+      <Route path="/track" element={<TrackSubmissionPage />} />
 
       {/* Protected routes (or login) */}
       <Route path="/*" element={user ? <ProtectedRoutes /> : <LoginCard />} />

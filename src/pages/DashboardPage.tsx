@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { getComplaints, getInspections } from '@/lib/db';
@@ -6,7 +6,8 @@ import { type Complaint, type Inspection } from '@/types';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/Badge';
 import { fmtDate } from '@/lib/utils';
-import { FileText, ClipboardList, AlertCircle, CheckCircle2, Clock, TrendingUp } from 'lucide-react';
+import { FileText, ClipboardList, AlertCircle, CheckCircle2, Clock, TrendingUp, AlertTriangle } from 'lucide-react';
+import { differenceInDays, startOfMonth, subMonths, format, isSameMonth } from 'date-fns';
 
 interface StatCardProps {
   label: string;
@@ -54,8 +55,21 @@ export function DashboardPage() {
   const recentComplaints = complaints.slice(0, 5);
   const recentInspections = inspections.slice(0, 5);
 
+  // Approaching inspections — accepted with commit/inspection date within 3 days
+  const upcoming = useMemo(() => {
+    const now = new Date();
+    return inspections
+      .filter(i => i.status === 'accepted' || i.status === 'rescheduled')
+      .map(i => {
+        const date = i.rescheduledDate ?? i.inspectionDate ?? i.factoryCommitDate;
+        return { i, daysOut: differenceInDays(date, now), date };
+      })
+      .filter(x => x.daysOut >= 0 && x.daysOut <= 3)
+      .sort((a, b) => a.daysOut - b.daysOut);
+  }, [inspections]);
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
         <p className="text-gray-500 mt-1">Welcome back, {appUser?.name}.</p>
@@ -67,6 +81,35 @@ export function DashboardPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-6">
+          {/* Upcoming inspections alert */}
+          {upcoming.length > 0 && (
+            <Card className="border-amber-200 bg-amber-50">
+              <CardBody className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-amber-800">
+                  <AlertTriangle className="w-5 h-5 shrink-0" />
+                  <p className="font-semibold text-sm">
+                    {upcoming.length} inspection{upcoming.length > 1 ? 's' : ''} approaching (within 3 days)
+                  </p>
+                </div>
+                <ul className="flex flex-col gap-1 ml-7">
+                  {upcoming.slice(0, 5).map(({ i, daysOut, date }) => (
+                    <li key={i.id} className="text-sm text-amber-900">
+                      <Link to={`/inspections/${i.id}`} className="hover:underline">
+                        <span className="font-mono font-medium">{i.customerPiNo}</span>
+                        {' · '}{i.factory}
+                        {' — '}
+                        <span className="font-medium">
+                          {daysOut === 0 ? 'today' : daysOut === 1 ? 'tomorrow' : `in ${daysOut} days`}
+                        </span>
+                        {' ('}{fmtDate(date)}{')'}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </CardBody>
+            </Card>
+          )}
+
           {/* Stats */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard label="Open Complaints" value={openComplaints} to="/complaints?status=open"
@@ -77,6 +120,12 @@ export function DashboardPage() {
               icon={<CheckCircle2 className="w-6 h-6 text-green-600" />} color="bg-green-50" />
             <StatCard label="Passed Inspections" value={passedInspections} to="/inspections?status=passed"
               icon={<TrendingUp className="w-6 h-6 text-purple-600" />} color="bg-purple-50" />
+          </div>
+
+          {/* Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <ComplaintsTrendChart complaints={complaints} />
+            <TopFactoriesChart complaints={complaints} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -131,5 +180,96 @@ export function DashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// ============== Charts ==============
+
+function ComplaintsTrendChart({ complaints }: { complaints: Complaint[] }) {
+  const data = useMemo(() => {
+    const now = new Date();
+    const months: { label: string; date: Date; count: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = startOfMonth(subMonths(now, i));
+      months.push({ label: format(d, 'MMM'), date: d, count: 0 });
+    }
+    for (const c of complaints) {
+      for (const m of months) {
+        if (isSameMonth(c.dateRecorded, m.date)) { m.count++; break; }
+      }
+    }
+    return months;
+  }, [complaints]);
+
+  const max = Math.max(1, ...data.map(d => d.count));
+
+  return (
+    <Card>
+      <CardHeader>
+        <h2 className="text-base font-semibold text-gray-900">Complaints (last 6 months)</h2>
+      </CardHeader>
+      <CardBody>
+        {data.every(d => d.count === 0) ? (
+          <p className="text-sm text-gray-500 text-center py-8">No data yet</p>
+        ) : (
+          <div className="flex items-end justify-between gap-2 h-40">
+            {data.map(d => (
+              <div key={d.label} className="flex-1 flex flex-col items-center gap-1">
+                <div className="text-xs font-medium text-gray-700">{d.count}</div>
+                <div
+                  className="w-full bg-blue-500 rounded-t hover:bg-blue-600 transition-colors"
+                  style={{ height: `${(d.count / max) * 100}%`, minHeight: d.count > 0 ? '4px' : '0' }}
+                  title={`${d.label}: ${d.count}`}
+                />
+                <div className="text-xs text-gray-500">{d.label}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function TopFactoriesChart({ complaints }: { complaints: Complaint[] }) {
+  const data = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of complaints) {
+      if (!c.factory) continue;
+      counts.set(c.factory, (counts.get(c.factory) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, count]) => ({ name, count }));
+  }, [complaints]);
+
+  const max = Math.max(1, ...data.map(d => d.count));
+
+  return (
+    <Card>
+      <CardHeader>
+        <h2 className="text-base font-semibold text-gray-900">Top factories by complaints</h2>
+      </CardHeader>
+      <CardBody>
+        {data.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-8">No data yet</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {data.map(d => (
+              <div key={d.name}>
+                <div className="flex items-center justify-between text-sm mb-1">
+                  <span className="text-gray-900 truncate">{d.name}</span>
+                  <span className="font-medium text-gray-700">{d.count}</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-red-400 rounded-full" style={{ width: `${(d.count / max) * 100}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardBody>
+    </Card>
   );
 }

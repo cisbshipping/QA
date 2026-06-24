@@ -70,7 +70,10 @@ service cloud.firestore {
         && request.resource.data.submitterEmail.matches('^[^@]+@[^@]+\\.[^@]+$')
         && request.resource.data.description.size() < 5000;
       // Only QA/admin can read or update.
-      allow read, update: if isQA();
+      // Public can look up a submission by exact reference number (= doc ID).
+      // Listing/querying still requires QA role.
+      allow get: if true;
+      allow list, update: if isQA();
       allow delete: if isAdmin();
     }
 
@@ -83,6 +86,17 @@ service cloud.firestore {
     match /settings/{id} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
+    }
+
+    match /letterheads/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /suppliers/{id} {
+      allow read: if isSignedIn();
+      allow create, update: if isEditor();
+      allow delete: if isAdmin();
     }
   }
 }

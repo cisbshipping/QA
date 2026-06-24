@@ -40,7 +40,7 @@ export function InboxPage() {
 
   useEffect(() => { load(); }, []);
 
-  const canReview = appUser?.role === 'admin' || appUser?.role === 'qa';
+  const canReview = appUser?.role === 'admin' || appUser?.role === 'qa' || appUser?.role === 'manager';
   if (!canReview) return <div className="p-6 text-gray-500">Access denied.</div>;
 
   const filtered = submissions.filter(s => !filter || s.status === filter);
@@ -58,7 +58,7 @@ export function InboxPage() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -130,7 +130,7 @@ export function InboxPage() {
 
               <fieldset className="border border-gray-200 rounded-lg p-4">
                 <legend className="px-2 text-sm font-semibold text-gray-700">Submitter</legend>
-                <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <div><dt className="text-xs text-gray-500">Name</dt><dd className="text-gray-900">{selected.submitterName}</dd></div>
                   <div><dt className="text-xs text-gray-500">Company</dt><dd className="text-gray-900">{selected.submitterCompany}</dd></div>
                   <div className="flex items-center gap-2 text-blue-600">
@@ -151,8 +151,9 @@ export function InboxPage() {
                 <dl className="flex flex-col gap-3 text-sm">
                   {selected.type === 'inspection' && (
                     <>
+                      {selected.ylCompany && <div><dt className="text-xs text-gray-500">Company (entity)</dt><dd className="text-gray-900">{selected.ylCompany}</dd></div>}
                       {selected.productInfo && <div><dt className="text-xs text-gray-500">Product Info</dt><dd className="text-gray-900">{selected.productInfo}</dd></div>}
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div><dt className="text-xs text-gray-500">Customer PI No.</dt><dd className="text-gray-900">{selected.customerPiNo}</dd></div>
                         <div><dt className="text-xs text-gray-500">Factory</dt><dd className="text-gray-900">{selected.factoryLocation}</dd></div>
                         <div><dt className="text-xs text-gray-500">Commit Date</dt><dd className="text-gray-900">{fmtDate(selected.factoryCommitDate)}</dd></div>
@@ -162,7 +163,7 @@ export function InboxPage() {
                   )}
                   {selected.type === 'complaint' && (
                     <>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div><dt className="text-xs text-gray-500">Factory / Supplier</dt><dd className="text-gray-900">{selected.factorySupplier ?? '—'}</dd></div>
                         <div><dt className="text-xs text-gray-500">Brand Name</dt><dd className="text-gray-900">{selected.brandName ?? '—'}</dd></div>
                         <div className="col-span-2"><dt className="text-xs text-gray-500">Product Name</dt><dd className="text-gray-900">{selected.productName ?? '—'}</dd></div>

@@ -1,10 +1,11 @@
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, setDoc,
   getDocs, getDoc, query, where, orderBy, serverTimestamp,
-  Timestamp, type QueryConstraint,
+  Timestamp, limit, startAfter, type QueryConstraint,
+  type QueryDocumentSnapshot, type DocumentData,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Complaint, Inspection, AppUser, AuditLog, Invite, UserRole, PublicSubmission, PublicSubmissionStatus } from '@/types';
+import type { Complaint, Inspection, AppUser, AuditLog, Invite, UserRole, PublicSubmission, PublicSubmissionStatus, Letterhead, Supplier } from '@/types';
 
 function toDate(v: unknown): Date {
   if (v instanceof Timestamp) return v.toDate();
@@ -65,6 +66,42 @@ export async function getComplaints(constraints: QueryConstraint[] = []): Promis
   return snap.docs.map(d => mapComplaint(d.id, d.data() as Record<string, unknown>));
 }
 
+export interface PagedResult<T> {
+  items: T[];
+  cursor: QueryDocumentSnapshot<DocumentData> | null;
+  hasMore: boolean;
+}
+
+export async function getComplaintsPage(pageSize = 50, after?: QueryDocumentSnapshot<DocumentData> | null): Promise<PagedResult<Complaint>> {
+  const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc'), limit(pageSize)];
+  if (after) constraints.push(startAfter(after));
+  const snap = await getDocs(query(collection(db, 'complaints'), ...constraints));
+  return {
+    items: snap.docs.map(d => mapComplaint(d.id, d.data() as Record<string, unknown>)),
+    cursor: snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null,
+    hasMore: snap.docs.length === pageSize,
+  };
+}
+
+export async function appendComplaintReply(id: string, reply: import('@/types').ComplaintReply): Promise<void> {
+  const cur = await getDoc(doc(db, 'complaints', id));
+  const existing = ((cur.data() as Record<string, unknown> | undefined)?.replies as import('@/types').ComplaintReply[] | undefined) ?? [];
+  await updateDoc(doc(db, 'complaints', id), {
+    replies: [...existing, reply],
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function setComplaintEmailSent(id: string, recipients: string[], sentBy: string): Promise<void> {
+  await updateDoc(doc(db, 'complaints', id), {
+    emailSentAt: serverTimestamp(),
+    emailSentBy: sentBy,
+    emailSentTo: recipients,
+    emailLastError: null,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function getComplaint(id: string): Promise<Complaint | null> {
   const snap = await getDoc(doc(db, 'complaints', id));
   if (!snap.exists()) return null;
@@ -96,6 +133,17 @@ export async function getInspections(constraints: QueryConstraint[] = []): Promi
   const q = query(collection(db, 'inspections'), orderBy('createdAt', 'desc'), ...constraints);
   const snap = await getDocs(q);
   return snap.docs.map(d => mapInspection(d.id, d.data() as Record<string, unknown>));
+}
+
+export async function getInspectionsPage(pageSize = 50, after?: QueryDocumentSnapshot<DocumentData> | null): Promise<PagedResult<Inspection>> {
+  const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc'), limit(pageSize)];
+  if (after) constraints.push(startAfter(after));
+  const snap = await getDocs(query(collection(db, 'inspections'), ...constraints));
+  return {
+    items: snap.docs.map(d => mapInspection(d.id, d.data() as Record<string, unknown>)),
+    cursor: snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null,
+    hasMore: snap.docs.length === pageSize,
+  };
 }
 
 export async function getInspection(id: string): Promise<Inspection | null> {
@@ -188,12 +236,19 @@ export async function generateSubmissionRef(type: 'complaint' | 'inspection'): P
 }
 
 export async function createPublicSubmission(data: Omit<PublicSubmission, 'id' | 'createdAt' | 'status'>): Promise<string> {
-  const ref = await addDoc(collection(db, 'publicSubmissions'), {
+  // Use referenceNo as doc ID so public users can look it up by ref number without listing the whole collection.
+  await setDoc(doc(db, 'publicSubmissions', data.referenceNo), {
     ...data,
     status: 'new',
     createdAt: serverTimestamp(),
   });
-  return ref.id;
+  return data.referenceNo;
+}
+
+export async function getSubmissionByRef(referenceNo: string): Promise<PublicSubmission | null> {
+  const snap = await getDoc(doc(db, 'publicSubmissions', referenceNo));
+  if (!snap.exists()) return null;
+  return mapSubmission(snap.id, snap.data() as Record<string, unknown>);
 }
 
 export async function listPublicSubmissions(): Promise<PublicSubmission[]> {
@@ -212,6 +267,95 @@ export async function updatePublicSubmission(id: string, status: PublicSubmissio
   await updateDoc(doc(db, 'publicSubmissions', id), {
     status, processedBy, notes: notes ?? '', processedAt: serverTimestamp(),
   });
+}
+
+// Suppliers / Factories
+function mapSupplier(id: string, data: Record<string, unknown>): Supplier {
+  return {
+    ...(data as Omit<Supplier, 'id' | 'createdAt' | 'updatedAt'>),
+    id,
+    createdAt: toDate(data.createdAt),
+    updatedAt: toDate(data.updatedAt),
+  };
+}
+
+export async function listSuppliers(): Promise<Supplier[]> {
+  const q = query(collection(db, 'suppliers'), orderBy('name', 'asc'));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => mapSupplier(d.id, d.data() as Record<string, unknown>));
+}
+
+export async function getSupplier(id: string): Promise<Supplier | null> {
+  const snap = await getDoc(doc(db, 'suppliers', id));
+  if (!snap.exists()) return null;
+  return mapSupplier(snap.id, snap.data() as Record<string, unknown>);
+}
+
+export async function createSupplier(data: Omit<Supplier, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+  const ref = await addDoc(collection(db, 'suppliers'), {
+    ...data, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function updateSupplier(id: string, data: Partial<Supplier>): Promise<void> {
+  await updateDoc(doc(db, 'suppliers', id), { ...data, updatedAt: serverTimestamp() });
+}
+
+export async function deleteSupplier(id: string): Promise<void> {
+  await deleteDoc(doc(db, 'suppliers', id));
+}
+
+// Companies list (editable in Settings)
+export async function getCompaniesSetting(): Promise<string[] | null> {
+  const snap = await getDoc(doc(db, 'settings', 'companies'));
+  if (!snap.exists()) return null;
+  const d = snap.data() as { list?: string[] };
+  return d.list ?? null;
+}
+
+export async function saveCompaniesSetting(list: string[]): Promise<void> {
+  await setDoc(doc(db, 'settings', 'companies'), { list, updatedAt: serverTimestamp() });
+}
+
+// Letterheads (stored as base64 data URLs, one doc per company)
+function letterheadDocId(company: string): string {
+  return company.replace(/[^\w-]+/g, '_');
+}
+
+export async function getLetterhead(company: string): Promise<Letterhead | null> {
+  const snap = await getDoc(doc(db, 'letterheads', letterheadDocId(company)));
+  if (!snap.exists()) return null;
+  const d = snap.data() as Record<string, unknown>;
+  return {
+    company,
+    dataUrl: d.dataUrl as string,
+    uploadedBy: d.uploadedBy as string,
+    uploadedAt: toDate(d.uploadedAt),
+  };
+}
+
+export async function listLetterheads(): Promise<Letterhead[]> {
+  const snap = await getDocs(collection(db, 'letterheads'));
+  return snap.docs.map(s => {
+    const d = s.data() as Record<string, unknown>;
+    return {
+      company: (d.company as string) ?? s.id,
+      dataUrl: d.dataUrl as string,
+      uploadedBy: d.uploadedBy as string,
+      uploadedAt: toDate(d.uploadedAt),
+    };
+  });
+}
+
+export async function saveLetterhead(company: string, dataUrl: string, uploadedBy: string): Promise<void> {
+  await setDoc(doc(db, 'letterheads', letterheadDocId(company)), {
+    company, dataUrl, uploadedBy, uploadedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteLetterhead(company: string): Promise<void> {
+  await deleteDoc(doc(db, 'letterheads', letterheadDocId(company)));
 }
 
 // Audit logs
