@@ -154,7 +154,9 @@ export function InboxPage() {
                       {selected.ylCompany && <div><dt className="text-xs text-gray-500">Company (entity)</dt><dd className="text-gray-900">{selected.ylCompany}</dd></div>}
                       {selected.productInfo && <div><dt className="text-xs text-gray-500">Product Info</dt><dd className="text-gray-900">{selected.productInfo}</dd></div>}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div><dt className="text-xs text-gray-500">Customer PI No.</dt><dd className="text-gray-900">{selected.customerPiNo}</dd></div>
+                        <div><dt className="text-xs text-gray-500">Customer</dt><dd className="text-gray-900">{selected.customer ?? '—'}</dd></div>
+                        <div><dt className="text-xs text-gray-500">PI No.</dt><dd className="text-gray-900">{selected.customerPiNo}</dd></div>
+                        <div><dt className="text-xs text-gray-500">PO No.</dt><dd className="text-gray-900">{selected.poNo ?? '—'}</dd></div>
                         <div><dt className="text-xs text-gray-500">Factory</dt><dd className="text-gray-900">{selected.factoryLocation}</dd></div>
                         <div><dt className="text-xs text-gray-500">Commit Date</dt><dd className="text-gray-900">{fmtDate(selected.factoryCommitDate)}</dd></div>
                         <div><dt className="text-xs text-gray-500">Qty (Cartons)</dt><dd className="text-gray-900">{selected.totalQtyCartons?.toLocaleString()}</dd></div>

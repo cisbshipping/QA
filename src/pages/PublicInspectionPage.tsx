@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { createPublicSubmission, generateSubmissionRef, createInspectionFromPublic } from '@/lib/db';
+import { createPublicSubmission, generateSubmissionRef, createInspectionFromPublic, listSuppliers } from '@/lib/db';
+import type { Supplier } from '@/types';
 import { useCompanies } from '@/hooks/useCompanies';
 import { Input, Textarea, Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -12,10 +13,10 @@ import { PublicSubmitLayout } from './PublicSubmitLayout';
 const schema = z.object({
   submitterName: z.string().min(1, 'Required'),
   submitterEmail: z.string().email('Invalid email'),
-  submitterPhone: z.string().optional(),
-  submitterCompany: z.string().min(1, 'Required'),
   ylCompany: z.string().min(1, 'Required'),
+  customer: z.string().min(1, 'Required'),
   customerPiNo: z.string().min(1, 'Required'),
+  poNo: z.string().min(1, 'Required'),
   factoryLocation: z.string().min(1, 'Required'),
   factoryCommitDate: z.string().min(1, 'Required'),
   totalQtyCartons: z.string().min(1, 'Required'),
@@ -30,6 +31,15 @@ export function PublicInspectionPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const companies = useCompanies();
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(true);
+
+  useEffect(() => {
+    listSuppliers()
+      .then(setSuppliers)
+      .catch(() => { /* fall back silently */ })
+      .finally(() => setLoadingSuppliers(false));
+  }, []);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
@@ -46,10 +56,10 @@ export function PublicInspectionPage() {
         referenceNo: refNo,
         submitterName: data.submitterName,
         submitterEmail: data.submitterEmail,
-        submitterPhone: data.submitterPhone,
-        submitterCompany: data.submitterCompany,
         ylCompany: data.ylCompany,
+        customer: data.customer,
         customerPiNo: data.customerPiNo,
+        poNo: data.poNo,
         factoryLocation: data.factoryLocation,
         factoryCommitDate: new Date(data.factoryCommitDate),
         totalQtyCartons: Number(data.totalQtyCartons),
@@ -85,8 +95,6 @@ export function PublicInspectionPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Your Name *" error={errors.submitterName?.message} {...register('submitterName')} />
             <Input label="Email Address *" type="email" error={errors.submitterEmail?.message} {...register('submitterEmail')} />
-            <Input label="Phone (optional)" {...register('submitterPhone')} />
-            <Input label="Company / Department *" error={errors.submitterCompany?.message} {...register('submitterCompany')} />
           </div>
         </fieldset>
 
@@ -101,13 +109,35 @@ export function PublicInspectionPage() {
               className="sm:col-span-2"
               {...register('ylCompany')}
             />
-            <Input label="Customer PI No. *" error={errors.customerPiNo?.message} {...register('customerPiNo')} />
-            <Input label="Factory / Location *" error={errors.factoryLocation?.message} {...register('factoryLocation')} />
+            <Input label="Customer *" error={errors.customer?.message} {...register('customer')} />
+            <Input label="PI No. *" error={errors.customerPiNo?.message} {...register('customerPiNo')} />
+            <Input label="PO No. *" error={errors.poNo?.message} {...register('poNo')} />
+
+            {/* Factory / Location dropdown — sourced from suppliers DB */}
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-gray-700">Factory / Location *</label>
+              <select
+                {...register('factoryLocation')}
+                disabled={loadingSuppliers}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">{loadingSuppliers ? 'Loading...' : 'Select factory'}</option>
+                {suppliers.map(s => (
+                  <option key={s.id} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+              {errors.factoryLocation && <p className="text-xs text-red-600">{errors.factoryLocation.message as string}</p>}
+              {!loadingSuppliers && suppliers.length === 0 && (
+                <p className="text-xs text-gray-500">No factories configured. Please contact the QA team.</p>
+              )}
+            </div>
+
             <Input label="Factory Commit Date *" type="date" error={errors.factoryCommitDate?.message} {...register('factoryCommitDate')}
               hint="Request inspection 2–4 weeks before commit date" />
-            <Input label="Total Quantity (Cartons) *" type="number" error={errors.totalQtyCartons?.message} {...register('totalQtyCartons')} />
-            <Input label="Product Description *" error={errors.productInfo?.message} {...register('productInfo')} className="sm:col-span-2"
-              placeholder="e.g. PFNT 11.4GM (BLUE), USAW, WTT AQL 1.5" />
+            <Input label="Total Quantity (Cartons) *" type="number" error={errors.totalQtyCartons?.message} {...register('totalQtyCartons')}
+              placeholder="Type the carton count manually" className="sm:col-span-2" />
+            <Textarea label="Product Description *" rows={3} error={errors.productInfo?.message} {...register('productInfo')}
+              placeholder="Type product details manually. e.g. PFNT 11.4GM (BLUE), USAW, WTT AQL 1.5" className="sm:col-span-2" />
           </div>
         </fieldset>
 

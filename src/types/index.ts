@@ -235,6 +235,7 @@ export interface PublicSubmission {
   othersDescription?: string;
   // Inspection-specific
   ylCompany?: string;
+  customer?: string;
   factoryLocation?: string;
   factoryCommitDate?: Date;
   totalQtyCartons?: number;

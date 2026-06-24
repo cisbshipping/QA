@@ -277,19 +277,22 @@ export async function createComplaintFromPublic(refNo: string, p: PublicSubmissi
 
 // Promote a public Inspection submission into the main `inspections` collection.
 export async function createInspectionFromPublic(refNo: string, p: PublicSubmission): Promise<void> {
+  const factoryName = p.factoryLocation || '—';
+  const matched = (await listSuppliers()).find(s => s.name.toLowerCase() === factoryName.toLowerCase());
   const raw: Record<string, unknown> = {
     source: 'public',
     submitterEmail: p.submitterEmail,
     submitterName: p.submitterName,
     picName: 'Public Submission',
     picUid: 'public',
-    department: p.submitterCompany || '—',
+    department: 'Public Submission',
     dateRequested: serverTimestamp(),
     company: p.ylCompany || '—',
-    customer: p.submitterCompany || p.submitterName,
+    customer: p.customer || p.submitterName,
     customerPiNo: p.customerPiNo || refNo,
-    supplierPoNo: '—',
-    factory: p.factoryLocation || '—',
+    supplierPoNo: p.poNo || '—',
+    factory: factoryName,
+    factoryId: matched?.id,
     factoryCommitDate: p.factoryCommitDate ?? new Date(),
     totalQtyCartons: p.totalQtyCartons ?? 0,
     product: p.productInfo || '—',
