@@ -104,6 +104,7 @@ export interface Complaint {
   natures: ComplaintNature[];
   othersDescription?: string;
   description: string;
+  photos?: SubmissionPhoto[];
   // Workflow
   status: ComplaintStatus;
   dateIssuedToFactory?: Date;

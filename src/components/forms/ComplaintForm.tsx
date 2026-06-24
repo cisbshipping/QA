@@ -1,21 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
 import { createComplaint, updateComplaint, generateComplaintNo, listSuppliers } from '@/lib/db';
-import { COMPLAINT_NATURES, type Complaint, type ComplaintNature, type Supplier } from '@/types';
+import { COMPLAINT_NATURES, type Complaint, type ComplaintNature, type Supplier, type SubmissionPhoto } from '@/types';
 import { useCompanies } from '@/hooks/useCompanies';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Input';
+import { Camera, X as XIcon, Image as ImageIcon } from 'lucide-react';
 import { CardBody, CardFooter } from '@/components/ui/Card';
 
 const schema = z.object({
   ylCompany: z.string().min(1, 'Required'),
   consignee: z.string().min(1, 'Required'),
   contactPerson: z.string().optional(),
-  phoneNo: z.string().optional(),
   emailAddress: z.string().email('Invalid email').optional().or(z.literal('')),
   factoryId: z.string().min(1, 'Pick a supplier'),
   brandName: z.string().min(1, 'Required'),
@@ -32,7 +32,6 @@ const schema = z.object({
   othersDescription: z.string().optional(),
   description: z.string().min(1, 'Required'),
   dateIssuedToFactory: z.string().optional(),
-  forwardedBy: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -52,6 +51,40 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
   const [loadingSuppliers, setLoadingSuppliers] = useState(true);
   const companies = useCompanies();
 
+  // ---- Photo upload ----
+  const MAX_PHOTOS = 5;
+  const MAX_FILE_BYTES = 4 * 1024 * 1024;
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const [existingPhotos, setExistingPhotos] = useState<SubmissionPhoto[]>(existing?.photos ?? []);
+  const [uploadProgress, setUploadProgress] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSubmitError('');
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    const remaining = MAX_PHOTOS - (existingPhotos.length + photoFiles.length);
+    if (files.length > remaining) { setSubmitError(`Up to ${MAX_PHOTOS} photos total.`); return; }
+    const oversize = files.find(f => f.size > MAX_FILE_BYTES);
+    if (oversize) { setSubmitError(`${oversize.name} is larger than 4 MB.`); return; }
+    const invalid = files.find(f => !f.type.startsWith('image/'));
+    if (invalid) { setSubmitError(`${invalid.name} is not an image.`); return; }
+    setPhotoFiles(p => [...p, ...files]);
+    setPhotoPreviews(p => [...p, ...files.map(f => URL.createObjectURL(f))]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeNewPhoto = (idx: number) => {
+    URL.revokeObjectURL(photoPreviews[idx]);
+    setPhotoFiles(p => p.filter((_, i) => i !== idx));
+    setPhotoPreviews(p => p.filter((_, i) => i !== idx));
+  };
+
+  const removeExistingPhoto = (idx: number) => {
+    setExistingPhotos(p => p.filter((_, i) => i !== idx));
+  };
+
   const { register, handleSubmit, control, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: existing
@@ -59,7 +92,6 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
           ylCompany: existing.ylCompany ?? '',
           consignee: existing.consignee,
           contactPerson: existing.contactPerson ?? '',
-          phoneNo: existing.phoneNo ?? '',
           emailAddress: existing.emailAddress ?? '',
           factoryId: existing.factoryId ?? '',
           brandName: existing.brandName,
@@ -76,7 +108,6 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
           othersDescription: existing.othersDescription ?? '',
           description: existing.description,
           dateIssuedToFactory: existing.dateIssuedToFactory ? existing.dateIssuedToFactory.toISOString().slice(0, 10) : '',
-          forwardedBy: existing.forwardedBy ?? '',
         }
       : { hasDefectiveSamplePhoto: false, hasDefectiveSampleReturn: false, natures: [] },
   });
@@ -94,6 +125,7 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
   }, []);
 
   const hasReturn = watch('hasDefectiveSampleReturn');
+  const hasPhoto = watch('hasDefectiveSamplePhoto');
   const selectedNatures = watch('natures') as string[];
 
   const onSubmit = async (data: FormData) => {
@@ -114,7 +146,6 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
         dateRecorded: existing?.dateRecorded ?? new Date(),
         consignee: data.consignee,
         contactPerson: data.contactPerson,
-        phoneNo: data.phoneNo,
         emailAddress: data.emailAddress,
         factory: picked?.name ?? existing?.factory ?? '',
         factoryId: data.factoryId,
@@ -132,18 +163,47 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
         othersDescription: data.othersDescription,
         description: data.description,
         dateIssuedToFactory: data.dateIssuedToFactory ? new Date(data.dateIssuedToFactory) : undefined,
-        forwardedBy: data.forwardedBy,
         status: (existing?.status ?? 'open') as Complaint['status'],
       };
+      // Upload new photos to SharePoint via the API. Only when "Yes" is selected and there's at least one file.
+      const uploaded: SubmissionPhoto[] = [];
+      if (data.hasDefectiveSamplePhoto && photoFiles.length > 0) {
+        for (let i = 0; i < photoFiles.length; i++) {
+          setUploadProgress(`Uploading photo ${i + 1} of ${photoFiles.length} to OneDrive...`);
+          const fd = new FormData();
+          fd.append('file', photoFiles[i]);
+          fd.append('refNo', complaintNo);
+          const res = await fetch('/api/upload-photo', { method: 'POST', body: fd });
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Photo upload failed (${res.status}): ${text.slice(0, 200)}`);
+          }
+          const result = await res.json() as { id: string; name: string; webUrl: string; size: number };
+          uploaded.push({
+            name: result.name,
+            storagePath: result.id,
+            downloadUrl: result.webUrl,
+            size: result.size,
+            contentType: photoFiles[i].type,
+            syncedToOneDrive: true,
+            oneDriveUrl: result.webUrl,
+          });
+        }
+        setUploadProgress('Saving complaint...');
+      }
+      const allPhotos = [...existingPhotos, ...uploaded];
+
       const payload = Object.fromEntries(
-        Object.entries(raw).filter(([, v]) => v !== undefined && v !== '')
-      ) as typeof raw;
+        Object.entries({ ...raw, photos: allPhotos.length > 0 ? allPhotos : undefined })
+          .filter(([, v]) => v !== undefined && v !== '')
+      ) as typeof raw & { photos?: SubmissionPhoto[] };
 
       if (existing) {
         await updateComplaint(existing.id, payload, user.uid, appUser.name, 'edited');
       } else {
         await createComplaint(payload as Omit<Complaint, 'id' | 'createdAt' | 'updatedAt'>);
       }
+      photoPreviews.forEach(URL.revokeObjectURL);
       onSuccess();
     } catch (err) {
       const e = err as { code?: string; message?: string };
@@ -155,6 +215,7 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
       console.error('Complaint submit error:', err);
     } finally {
       setLoading(false);
+      setUploadProgress('');
     }
   };
 
@@ -189,8 +250,7 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Consignee *" error={errors.consignee?.message} {...register('consignee')} />
             <Input label="Contact Person" {...register('contactPerson')} />
-            <Input label="Phone No." {...register('phoneNo')} />
-            <Input label="Email Address" type="email" {...register('emailAddress')} error={errors.emailAddress?.message} />
+            <Input label="Email Address" type="email" {...register('emailAddress')} error={errors.emailAddress?.message} className="sm:col-span-2" />
           </div>
         </fieldset>
 
@@ -235,6 +295,57 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
               <input type="checkbox" {...register('hasDefectiveSamplePhoto')} className="w-4 h-4 rounded text-blue-600" />
               <span className="text-sm text-gray-700">Defective sample photo available</span>
             </label>
+
+            {/* Photo uploader — only when checkbox is ticked. Posts to /api/upload-photo → SharePoint. */}
+            {hasPhoto && (
+              <div className="flex flex-col gap-2 bg-blue-50/50 border border-blue-100 rounded-lg p-4 ml-6">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">Upload photo(s)</p>
+                    <p className="text-xs text-gray-500">Up to {MAX_PHOTOS} photos · 4 MB each · saved to OneDrive</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={(existingPhotos.length + photoFiles.length) >= MAX_PHOTOS}
+                  >
+                    <Camera className="w-4 h-4" /> Choose
+                  </Button>
+                </div>
+                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFilesSelected} className="hidden" />
+
+                {(existingPhotos.length > 0 || photoPreviews.length > 0) ? (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-2">
+                    {existingPhotos.map((p, i) => (
+                      <div key={`existing-${i}`} className="relative group rounded-lg overflow-hidden border border-gray-200 bg-white aspect-square">
+                        <img src={p.downloadUrl} alt={p.name} className="w-full h-full object-cover" />
+                        <button type="button" onClick={() => removeExistingPhoto(i)}
+                          className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded-full p-1" title="Remove from complaint">
+                          <XIcon className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    {photoPreviews.map((src, i) => (
+                      <div key={`new-${i}`} className="relative group rounded-lg overflow-hidden border border-blue-300 bg-white aspect-square">
+                        <img src={src} alt={`new ${i + 1}`} className="w-full h-full object-cover" />
+                        <span className="absolute bottom-1 left-1 bg-blue-600 text-white text-[10px] px-1 rounded">NEW</span>
+                        <button type="button" onClick={() => removeNewPhoto(i)}
+                          className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded-full p-1" title="Remove">
+                          <XIcon className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                    <ImageIcon className="w-3.5 h-3.5" /> No photos yet
+                  </div>
+                )}
+              </div>
+            )}
+
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" {...register('hasDefectiveSampleReturn')} className="w-4 h-4 rounded text-blue-600" />
               <span className="text-sm text-gray-700">Defective sample return requested</span>
@@ -298,10 +409,7 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
         <Textarea label="Description of Complaint *" rows={4} error={errors.description?.message} {...register('description')} />
 
         {/* Workflow fields */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input label="Date Issued to Factory" type="date" {...register('dateIssuedToFactory')} />
-          <Input label="Forwarded By" {...register('forwardedBy')} />
-        </div>
+        <Input label="Date Issued to Factory" type="date" {...register('dateIssuedToFactory')} className="max-w-xs" />
 
         {Object.keys(errors).length > 0 && (
           <div data-form-error-summary className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
@@ -318,6 +426,10 @@ export function ComplaintForm({ existing, onSuccess, onCancel }: Props) {
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
             {submitError}
           </div>
+        )}
+
+        {uploadProgress && (
+          <p className="text-sm text-blue-600">{uploadProgress}</p>
         )}
       </CardBody>
 
