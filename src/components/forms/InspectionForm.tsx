@@ -25,9 +25,6 @@ const schema = z.object({
   productStandard: z.string().optional(),
   productGrade: z.string().optional(),
   containerSize: z.string().optional(),
-  criteriaNotIndustrial: z.boolean(),
-  criteriaUnderstandOutsideKV: z.boolean(),
-  criteriaCostBelow020: z.boolean(),
   reasonForRequest: z.string().min(1, 'Required'),
   focusAreas: z.array(z.string()),
   focusOthers: z.string().optional(),
@@ -38,7 +35,6 @@ const schema = z.object({
   needsPsiReport: z.boolean(),
   requestedByName: z.string().min(1, 'Required'),
   requestedByDate: z.string().min(1, 'Required'),
-  hodName: z.string().min(1, 'Required'),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -94,9 +90,6 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
           productStandard: existing.productStandard ?? '',
           productGrade: existing.productGrade ?? '',
           containerSize: existing.containerSize ?? '',
-          criteriaNotIndustrial: existing.criteriaNotIndustrial,
-          criteriaUnderstandOutsideKV: existing.criteriaUnderstandOutsideKV,
-          criteriaCostBelow020: existing.criteriaCostBelow020,
           reasonForRequest: existing.reasonForRequest,
           focusAreas: existing.focusAreas,
           focusOthers: existing.focusOthers ?? '',
@@ -107,16 +100,11 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
           needsPsiReport: existing.needsPsiReport,
           requestedByName: existing.requestedByName,
           requestedByDate: existing.requestedByDate.toISOString().slice(0, 10),
-          hodName: existing.hodName,
         }
       : {
           department: appUser?.department ?? '',
           requestedByName: appUser?.name ?? '',
           requestedByDate: new Date().toISOString().slice(0, 10),
-          hodName: '',
-          criteriaNotIndustrial: false,
-          criteriaUnderstandOutsideKV: false,
-          criteriaCostBelow020: false,
           needsPsiReport: false,
           focusAreas: [],
           inspectorTypes: [],
@@ -152,9 +140,6 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
         productStandard: data.productStandard,
         productGrade: data.productGrade,
         containerSize: data.containerSize,
-        criteriaNotIndustrial: data.criteriaNotIndustrial,
-        criteriaUnderstandOutsideKV: data.criteriaUnderstandOutsideKV,
-        criteriaCostBelow020: data.criteriaCostBelow020,
         reasonForRequest: data.reasonForRequest,
         focusAreas: data.focusAreas,
         focusOthers: data.focusOthers,
@@ -165,7 +150,6 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
         needsPsiReport: data.needsPsiReport,
         requestedByName: data.requestedByName,
         requestedByDate: new Date(data.requestedByDate),
-        hodName: data.hodName,
         status: (existing?.status ?? 'pending') as Inspection['status'],
       };
 
@@ -256,29 +240,18 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
         {/* Product */}
         <fieldset className="border border-gray-200 rounded-lg p-4">
           <legend className="px-2 text-sm font-semibold text-gray-700">Product Description</legend>
-          <div className="grid grid-cols-3 gap-4">
-            <Input label="Product *" error={errors.product?.message} {...register('product')} className="col-span-3" placeholder="e.g. PFNT 11.4GM (BLUE)" />
-            <Input label="Standard" {...register('productStandard')} placeholder="e.g. USAW" />
-            <Input label="Grade" {...register('productGrade')} placeholder="e.g. WTT AQL 1.5" />
-          </div>
-        </fieldset>
-
-        {/* Criteria */}
-        <fieldset className="border border-gray-200 rounded-lg p-4">
-          <legend className="px-2 text-sm font-semibold text-gray-700">Criteria Acknowledgement (tick all to proceed)</legend>
-          <div className="flex flex-col gap-2">
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input type="checkbox" {...register('criteriaNotIndustrial')} className="mt-0.5 w-4 h-4 rounded text-blue-600" />
-              <span className="text-sm text-gray-700">Not a request for industrial &amp; stock gloves</span>
-            </label>
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input type="checkbox" {...register('criteriaUnderstandOutsideKV')} className="mt-0.5 w-4 h-4 rounded text-blue-600" />
-              <span className="text-sm text-gray-700">Understand that inspections outside Klang Valley will be conducted by a third party inspector</span>
-            </label>
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input type="checkbox" {...register('criteriaCostBelow020')} className="mt-0.5 w-4 h-4 rounded text-blue-600" />
-              <span className="text-sm text-gray-700">Inspection cost is below USD 0.20 per carton</span>
-            </label>
+          <div className="flex flex-col gap-4">
+            <Textarea
+              label="Product *"
+              rows={3}
+              error={errors.product?.message}
+              {...register('product')}
+              placeholder="Describe the product. Include name, brand, grammage, standard, AQL grade, etc. — multi-line allowed."
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input label="Standard (optional)" {...register('productStandard')} placeholder="e.g. USAW" />
+              <Input label="Grade (optional)" {...register('productGrade')} placeholder="e.g. WTT AQL 1.5" />
+            </div>
           </div>
         </fieldset>
 
@@ -380,7 +353,6 @@ export function InspectionForm({ existing, onSuccess, onCancel }: Props) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Requested By *" error={errors.requestedByName?.message} {...register('requestedByName')} />
             <Input label="Date *" type="date" error={errors.requestedByDate?.message} {...register('requestedByDate')} />
-            <Input label="Reviewed By (HOD) *" error={errors.hodName?.message} {...register('hodName')} />
           </div>
         </fieldset>
         {Object.keys(errors).length > 0 && (
