@@ -8,9 +8,7 @@ export function PublicSubmitLayout({ title, subtitle, children }: { title: strin
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center text-gray-700">
-            <Logo className="w-6 h-6" />
-          </div>
+          <Logo className="w-10 h-10" />
           <div>
             <h1 className="text-base font-semibold text-gray-900">QA Inspection System</h1>
             <p className="text-xs text-gray-500 leading-tight">Cranberry International Sdn Bhd / ASAP International Sdn Bhd</p>

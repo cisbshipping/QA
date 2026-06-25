@@ -20,9 +20,7 @@ export function Layout() {
             <Menu className="w-5 h-5 text-gray-700" />
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center text-gray-700">
-              <Logo className="w-5 h-5" />
-            </div>
+            <Logo className="w-8 h-8" />
             <p className="text-sm font-semibold text-gray-900">QA System</p>
           </div>
           <div className="ml-auto"><HeaderClock /></div>
