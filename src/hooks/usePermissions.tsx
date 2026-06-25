@@ -23,6 +23,8 @@ export const DEFAULT_PERMISSIONS: PermissionConfig = {
   'inspection.edit': ['admin', 'manager', 'qa'],
   'inspection.review': ['admin', 'manager', 'qa'],
   'inspection.result': ['admin', 'manager', 'qa'],
+  'inspection.comment': ['admin', 'manager', 'qa'],
+  'inspection.delete': ['admin'],
   'inspection.reschedule': ['admin'],
   'inspection.revert': ['admin'],
   'inspection.reopen': ['admin'],

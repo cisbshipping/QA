@@ -42,6 +42,8 @@ const GROUPS: PermissionGroup[] = [
       { key: 'inspection.create', label: 'Create + edit inspection requests' },
       { key: 'inspection.review', label: 'Accept / Reject inspection requests' },
       { key: 'inspection.result', label: 'Record Pass / Fail results' },
+      { key: 'inspection.comment', label: 'Post remarks on inspections', description: 'Internal comment thread on the detail page' },
+      { key: 'inspection.delete', label: 'Delete inspections', description: 'Permanent — cannot be undone' },
       { key: 'inspection.reschedule', label: 'Reschedule inspection date' },
       { key: 'inspection.revert', label: 'Revert last attempt', description: 'Undo a recorded pass or fail' },
       { key: 'inspection.reopen', label: 'Reopen passed/failed inspections' },

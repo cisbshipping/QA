@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getInspections, deleteInspection } from '@/lib/db';
+import { usePermissions } from '@/hooks/usePermissions';
 import { type Inspection, type InspectionStatus } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { Card } from '@/components/ui/Card';
@@ -55,8 +56,9 @@ export function InspectionsPage() {
     return matchStatus && matchSearch;
   });
 
-  const canEdit = appUser?.role === 'admin' || appUser?.role === 'qa' || appUser?.role === 'manager';
-  const canDelete = appUser?.role === 'admin';
+  const { can } = usePermissions();
+  const canEdit = can('inspection.edit');
+  const canDelete = can('inspection.delete');
 
   const handleDelete = async (i: Inspection) => {
     if (!appUser) return;

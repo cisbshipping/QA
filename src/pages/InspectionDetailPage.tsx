@@ -173,6 +173,7 @@ export function InspectionDetailPage() {
   const canReschedule = can('inspection.reschedule');
   const canRevert = can('inspection.revert');
   const canReopen = can('inspection.reopen');
+  const canComment = can('inspection.comment');
 
   // ---- Admin override actions ----
   const [showResched, setShowResched] = useState(false);
@@ -456,7 +457,7 @@ export function InspectionDetailPage() {
               )}
 
               {/* Add new comment */}
-              {canEdit && (
+              {canComment && (
                 <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
                   <Textarea
                     label="Add a remark"
