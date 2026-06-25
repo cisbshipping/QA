@@ -358,7 +358,6 @@ export function InspectionDetailPage() {
                 <DetailRow label="Requested By" value={inspection.requestedByName} />
                 <DetailRow label="Request Date" value={fmtDate(inspection.requestedByDate)} />
                 <DetailRow label="Reviewed By (HOD)" value={inspection.hodName} />
-                <DetailRow label="HOD Date" value={fmtDate(inspection.hodDate)} />
               </dl>
             </CardBody>
           </Card>
