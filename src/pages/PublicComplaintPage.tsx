@@ -5,7 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { createPublicSubmission, generateSubmissionRef, listSuppliers, createComplaintFromPublic } from '@/lib/db';
 import { COMPLAINT_NATURES, type ComplaintNature, type SubmissionPhoto, type Supplier } from '@/types';
-import { Input, Textarea } from '@/components/ui/Input';
+import { useCompanies } from '@/hooks/useCompanies';
+import { Input, Textarea, Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { PublicSubmitLayout } from './PublicSubmitLayout';
 import { Camera, X, Image as ImageIcon } from 'lucide-react';
@@ -17,8 +18,9 @@ const schema = z.object({
   // Submitter
   submitterName: z.string().min(1, 'Required'),
   submitterEmail: z.string().email('Invalid email'),
-  submitterCompany: z.string().min(1, 'Required'),
+  ylCompany: z.string().min(1, 'Required'),
   // Product (all required)
+  consignee: z.string().min(1, 'Required'),
   factorySupplier: z.string().min(1, 'Required'),
   brandName: z.string().min(1, 'Required'),
   productName: z.string().min(1, 'Required'),
@@ -52,6 +54,7 @@ export function PublicComplaintPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(true);
+  const companies = useCompanies();
 
   useEffect(() => {
     listSuppliers()
@@ -132,7 +135,10 @@ export function PublicComplaintPage() {
         referenceNo: refNo,
         submitterName: data.submitterName,
         submitterEmail: data.submitterEmail,
-        submitterCompany: data.submitterCompany,
+        ylCompany: data.ylCompany,
+        // Consignee (the customer on the order) is now collected as `submitterCompany`
+        // so existing helpers + Inbox display keep working — they map this to the complaint's `consignee` field.
+        submitterCompany: data.consignee,
         factorySupplier: data.factorySupplier,
         brandName: data.brandName,
         productName: data.productName,
@@ -183,7 +189,14 @@ export function PublicComplaintPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Your Name *" error={errors.submitterName?.message} {...register('submitterName')} />
             <Input label="Email Address *" type="email" error={errors.submitterEmail?.message} {...register('submitterEmail')} />
-            <Input label="Consignee / Company *" error={errors.submitterCompany?.message} {...register('submitterCompany')} />
+            <Select
+              label="Company *"
+              error={errors.ylCompany?.message}
+              options={companies.map(c => ({ value: c, label: c }))}
+              placeholder="Select company"
+              className="sm:col-span-2"
+              {...register('ylCompany')}
+            />
           </div>
         </fieldset>
 
@@ -191,6 +204,7 @@ export function PublicComplaintPage() {
         <fieldset className="border border-gray-200 rounded-lg p-4">
           <legend className="px-2 text-sm font-semibold text-gray-700">Complaint Information</legend>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input label="Consignee *" error={errors.consignee?.message} {...register('consignee')} className="sm:col-span-2" />
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium text-gray-700">Factory / Supplier *</label>
               <select

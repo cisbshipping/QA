@@ -260,6 +260,7 @@ export async function createComplaintFromPublic(refNo: string, p: PublicSubmissi
   const raw: Record<string, unknown> = {
     complaintNo: refNo,
     source: 'public',
+    ylCompany: p.ylCompany,
     submitterEmail: p.submitterEmail,
     submitterName: p.submitterName,
     recordedBy: 'Public Submission',
