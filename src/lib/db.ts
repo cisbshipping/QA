@@ -184,6 +184,20 @@ export async function updateInspection(id: string, data: Partial<Inspection>, us
   await logAudit({ targetType: 'inspection', targetId: id, action, userId, userName, details: JSON.stringify(Object.keys(data)) });
 }
 
+export async function deleteInspection(id: string, userId: string, userName: string): Promise<void> {
+  await deleteDoc(doc(db, 'inspections', id));
+  await logAudit({ targetType: 'inspection', targetId: id, action: 'deleted', userId, userName });
+}
+
+export async function appendInspectionComment(id: string, comment: import('@/types').InspectionComment): Promise<void> {
+  const cur = await getDoc(doc(db, 'inspections', id));
+  const existing = ((cur.data() as Record<string, unknown> | undefined)?.inspectionComments as import('@/types').InspectionComment[] | undefined) ?? [];
+  await updateDoc(doc(db, 'inspections', id), {
+    inspectionComments: [...existing, comment],
+    updatedAt: serverTimestamp(),
+  });
+}
+
 // Users
 export async function getUser(uid: string): Promise<AppUser | null> {
   const snap = await getDoc(doc(db, 'users', uid));

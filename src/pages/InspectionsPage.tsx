@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { getInspections } from '@/lib/db';
+import { getInspections, deleteInspection } from '@/lib/db';
 import { type Inspection, type InspectionStatus } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { Card } from '@/components/ui/Card';
@@ -9,7 +9,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { InspectionForm } from '@/components/forms/InspectionForm';
 import { fmtDate } from '@/lib/utils';
-import { Plus, Search, Eye, Pencil, List, Calendar as CalIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Eye, Pencil, Trash2, List, Calendar as CalIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths,
   isSameMonth, isSameDay, isToday, format, startOfDay,
@@ -56,6 +56,14 @@ export function InspectionsPage() {
   });
 
   const canEdit = appUser?.role === 'admin' || appUser?.role === 'qa' || appUser?.role === 'manager';
+  const canDelete = appUser?.role === 'admin';
+
+  const handleDelete = async (i: Inspection) => {
+    if (!appUser) return;
+    if (!confirm(`Delete inspection ${i.inspectionNo ?? i.customerPiNo}? This cannot be undone.`)) return;
+    await deleteInspection(i.id, appUser.uid, appUser.name);
+    load();
+  };
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto">
@@ -163,6 +171,11 @@ export function InspectionsPage() {
                             {canEdit && i.status === 'pending' && (
                               <button onClick={() => { setEditing(i); setShowForm(true); }} className="p-1.5 rounded hover:bg-gray-100 text-gray-500" title="Edit">
                                 <Pencil className="w-4 h-4" />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button onClick={() => handleDelete(i)} className="p-1.5 rounded hover:bg-red-50 text-red-500" title="Delete">
+                                <Trash2 className="w-4 h-4" />
                               </button>
                             )}
                           </div>

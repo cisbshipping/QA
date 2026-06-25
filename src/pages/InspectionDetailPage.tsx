@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { getInspection, updateInspection } from '@/lib/db';
+import { getInspection, updateInspection, appendInspectionComment } from '@/lib/db';
 import { type Inspection } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -11,7 +11,7 @@ import { Modal } from '@/components/ui/Modal';
 import { InspectionForm } from '@/components/forms/InspectionForm';
 import { Input, Textarea } from '@/components/ui/Input';
 import { fmtDate, fmtDateTime } from '@/lib/utils';
-import { ArrowLeft, Pencil, CheckCircle, XCircle, CheckSquare, XSquare } from 'lucide-react';
+import { ArrowLeft, Pencil, CheckCircle, XCircle, CheckSquare, XSquare, MessageSquare, Send } from 'lucide-react';
 
 function DetailRow({ label, value }: { label: string; value?: string | null | boolean | number }) {
   if (value === undefined || value === null || value === '') return null;
@@ -49,6 +49,28 @@ export function InspectionDetailPage() {
   const [reschedDate, setReschedDate] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [commentDraft, setCommentDraft] = useState('');
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+
+  const handleAddComment = async () => {
+    if (!inspection || !user || !appUser) return;
+    if (!commentDraft.trim()) return;
+    setCommentSubmitting(true);
+    try {
+      await appendInspectionComment(inspection.id, {
+        message: commentDraft.trim(),
+        author: appUser.name,
+        authorUid: user.uid,
+        createdAt: new Date().toISOString(),
+      });
+      setCommentDraft('');
+      await load();
+    } catch (err) {
+      setActionError((err as Error).message);
+    } finally {
+      setCommentSubmitting(false);
+    }
+  };
 
   const load = async () => {
     if (!id) return;
@@ -410,6 +432,49 @@ export function InspectionDetailPage() {
           )}
 
           {/* Inspection attempts history */}
+          {/* Internal comments / remarks */}
+          <Card>
+            <CardHeader className="flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-gray-500" />
+              <h2 className="font-semibold text-gray-800">Remarks ({inspection.inspectionComments?.length ?? 0})</h2>
+            </CardHeader>
+            <CardBody className="flex flex-col gap-3">
+              {(!inspection.inspectionComments || inspection.inspectionComments.length === 0) ? (
+                <p className="text-sm text-gray-500">No remarks yet. Add a note for your QA team below.</p>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {inspection.inspectionComments.map((c, idx) => (
+                    <li key={idx} className="border-l-4 border-blue-200 pl-3">
+                      <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-gray-900">{c.author}</p>
+                        <p className="text-xs text-gray-500">{fmtDateTime(new Date(c.createdAt))}</p>
+                      </div>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap mt-1">{c.message}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {/* Add new comment */}
+              {canEdit && (
+                <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
+                  <Textarea
+                    label="Add a remark"
+                    rows={3}
+                    value={commentDraft}
+                    onChange={e => setCommentDraft(e.target.value)}
+                    placeholder="Notes for your QA team — visible to all internal users."
+                  />
+                  <div className="flex justify-end">
+                    <Button size="sm" loading={commentSubmitting} onClick={handleAddComment} disabled={!commentDraft.trim()}>
+                      <Send className="w-4 h-4" /> Post
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardBody>
+          </Card>
+
           {inspection.inspectionAttempts && inspection.inspectionAttempts.length > 0 && (
             <Card>
               <CardHeader><h2 className="font-semibold text-gray-800">Inspection Attempts ({inspection.inspectionAttempts.length})</h2></CardHeader>

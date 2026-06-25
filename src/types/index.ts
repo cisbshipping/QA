@@ -133,6 +133,13 @@ export interface ProductItem {
   grade?: string;
 }
 
+export interface InspectionComment {
+  message: string;
+  author: string;
+  authorUid: string;
+  createdAt: string; // ISO
+}
+
 export interface InspectionAttempt {
   attemptNo: number;
   scheduledDate: string; // ISO
@@ -192,6 +199,7 @@ export interface Inspection {
   resultNotes?: string;
   rescheduledDate?: Date;
   inspectionAttempts?: InspectionAttempt[];
+  inspectionComments?: InspectionComment[];
   reviewNotes?: string;
   reviewedBy?: string;
   reviewedAt?: Date;
