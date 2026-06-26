@@ -61,7 +61,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           </button>
         </div>
 
-        <nav className="flex-1 px-3 py-4 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 overflow-y-auto sidebar-scroll">
           {/* Main */}
           <div className="flex flex-col gap-0.5">
             {mainItems.map(({ to, icon: Icon, label }) => (
