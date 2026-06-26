@@ -256,7 +256,7 @@ export function InspectionDetailPage() {
           </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold text-gray-900 font-mono break-all">{inspection.inspectionNo ?? '—'}</h1>
+              <h1 className="text-xl font-bold text-gray-900 font-mono break-all">{inspection.inspectionNo ?? (inspection.source === 'public' ? inspection.id : '—')}</h1>
               <StatusBadge status={inspection.status} />
             </div>
             <p className="text-sm text-gray-500 mt-0.5">

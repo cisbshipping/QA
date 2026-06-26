@@ -152,7 +152,7 @@ export function InspectionsPage() {
                     {filtered.map(i => (
                       <tr key={i.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-mono text-blue-700 font-medium">
-                          {i.inspectionNo ?? '—'}
+                          {i.inspectionNo ?? (i.source === 'public' ? i.id : '—')}
                           {i.source === 'public' && (
                             <span className="ml-2 px-1.5 py-0.5 text-[10px] font-semibold bg-purple-100 text-purple-700 rounded uppercase">Public</span>
                           )}

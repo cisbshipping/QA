@@ -118,7 +118,9 @@ export function LoginCard() {
                     <FileText className="w-3.5 h-3.5 text-red-500" /> Submit Complaint
                   </p>
                   <p className="text-gray-600">Use this if you received a product with a quality issue (holes, tears, dirt, packaging defect, wrong labeling, etc.).</p>
-                  <p className="mt-1.5 text-gray-600"><span className="font-medium">You'll need to provide:</span> your contact details, the product info (brand, PI number, lot number if available), the type of defect, and a clear description.</p>
+                  <p className="mt-1.5 text-gray-600"><span className="font-medium">Your Details:</span> name, email, and the YL company you bought from (Cranberry, ASAP, EcoBee or Promaz).</p>
+                  <p className="mt-1.5 text-gray-600"><span className="font-medium">Complaint Information:</span> consignee, factory, brand, product, PI no., PO no., lot no., size, quantity, defect type and description.</p>
+                  <p className="mt-1.5 text-gray-600"><span className="font-medium">Photos (optional):</span> tick "Yes" to attach up to 5 images of the defect — this speeds up review.</p>
                 </div>
 
                 <div>
@@ -126,13 +128,17 @@ export function LoginCard() {
                     <ClipboardList className="w-3.5 h-3.5 text-blue-500" /> Inspection Request
                   </p>
                   <p className="text-gray-600">Use this to request a pre-shipment quality inspection at the factory before goods are dispatched.</p>
-                  <p className="mt-1.5 text-gray-600"><span className="font-medium">You'll need to provide:</span> the Customer PI number, factory location, factory commit date (submit at least 2 weeks ahead), total carton quantity, and the product description.</p>
+                  <p className="mt-1.5 text-gray-600"><span className="font-medium">Your Details:</span> name, email, and the YL company placing the order.</p>
+                  <p className="mt-1.5 text-gray-600"><span className="font-medium">Order Information:</span> customer, Customer PI no., PO no., factory, factory commit date (submit at least 2 weeks ahead), and total carton quantity.</p>
+                  <p className="mt-1.5 text-gray-600"><span className="font-medium">Product:</span> product description with optional standard and grade — use "+ Add Product" if the PI has more than one item.</p>
+                  <p className="mt-1.5 text-gray-600"><span className="font-medium">Inspection Setup:</span> AQL (purchase from supplier), Area to Focus checkboxes, and whether you need a PSI report.</p>
                 </div>
 
                 <div>
                   <p className="font-semibold text-gray-900 mb-1">What happens next</p>
                   <ol className="list-decimal list-inside text-gray-600 space-y-1">
                     <li>You'll get a reference number on screen — <span className="font-medium">save it</span>.</li>
+                    <li>Use "Track an existing submission" above and enter your PI no. to check status anytime.</li>
                     <li>Our QA team is notified and will review the submission.</li>
                     <li>We'll contact you by email within 2 business days, usually sooner.</li>
                     <li>For complaints: you may be asked to send sample photos or return goods.</li>

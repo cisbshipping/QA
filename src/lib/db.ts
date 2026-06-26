@@ -312,6 +312,7 @@ export async function createInspectionFromPublic(refNo: string, p: PublicSubmiss
   const factoryName = p.factoryLocation || '—';
   const matched = (await listSuppliers()).find(s => s.name.toLowerCase() === factoryName.toLowerCase());
   const raw: Record<string, unknown> = {
+    inspectionNo: refNo,
     source: 'public',
     submitterEmail: p.submitterEmail,
     submitterName: p.submitterName,
